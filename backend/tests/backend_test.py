@@ -391,3 +391,167 @@ class TestAgentEndpoints:
         # First line must be shebang
         first_line = r.text.splitlines()[0] if r.text else ""
         assert first_line.startswith("#!/usr/bin/env python3"), f"got: {first_line!r}"
+
+
+# ---------- Iteration 3: Remote-control command flow + Windows installer ----------
+class TestRemoteControlCommands:
+    """End-to-end: register agent (with screen dims + can_control) -> start session ->
+    queue commands via authed operator -> agent polls -> agent acks."""
+
+    @pytest.fixture(scope="class")
+    def agent_and_session(self, admin_session):
+        # 1. create access token
+        tk = admin_session.post(
+            f"{BASE_URL}/api/access-tokens",
+            json={"label": "TEST_cmd_tk", "expires_in_days": 7}, timeout=20,
+        ).json()
+
+        # 2. register agent with screen dims + can_control
+        reg = requests.post(
+            f"{BASE_URL}/api/agent/register",
+            json={
+                "token": tk["token"], "hostname": "TEST_CMD_HOST", "os": "windows",
+                "screen_width": 1920, "screen_height": 1080, "can_control": True,
+            }, timeout=20,
+        )
+        assert reg.status_code == 200, reg.text
+        reg = reg.json()
+        device_id = reg["device_id"]
+        agent_secret = reg["agent_secret"]
+
+        # 3. heartbeat to mark online (also tests new fields accepted)
+        hb = requests.post(
+            f"{BASE_URL}/api/agent/heartbeat",
+            json={"device_id": device_id, "agent_secret": agent_secret,
+                  "screen_width": 1920, "screen_height": 1080, "can_control": True},
+            timeout=20,
+        )
+        assert hb.status_code == 200
+
+        # 4. start session
+        sess = admin_session.post(
+            f"{BASE_URL}/api/sessions",
+            json={"device_id": device_id, "note": "TEST_cmd"}, timeout=20,
+        )
+        assert sess.status_code == 200, sess.text
+        sess = sess.json()
+
+        yield {"device_id": device_id, "agent_secret": agent_secret,
+               "session_id": sess["id"], "token_id": tk["id"]}
+
+        # teardown
+        admin_session.post(f"{BASE_URL}/api/sessions/{sess['id']}/end", timeout=20)
+        admin_session.delete(f"{BASE_URL}/api/devices/{device_id}", timeout=20)
+        admin_session.delete(f"{BASE_URL}/api/access-tokens/{tk['id']}", timeout=20)
+
+    def test_screenshot_returns_can_control_and_dims(self, admin_session, agent_and_session):
+        ctx = agent_and_session
+        r = admin_session.get(f"{BASE_URL}/api/devices/{ctx['device_id']}/screenshot", timeout=20)
+        assert r.status_code == 200
+        d = r.json()
+        assert d["can_control"] is True
+        assert d["screen_width"] == 1920
+        assert d["screen_height"] == 1080
+
+    def test_queue_command_404_when_session_missing(self, admin_session):
+        r = admin_session.post(
+            f"{BASE_URL}/api/sessions/{uuid.uuid4()}/command",
+            json={"action": "mouse_click", "x": 0.5, "y": 0.5}, timeout=20,
+        )
+        assert r.status_code == 404
+
+    def test_queue_command_400_when_session_ended(self, admin_session, agent_and_session):
+        # create a fresh online device + session and END it, then try to queue
+        # use the same agent token flow but simpler: reuse seeded device
+        # easiest: create a device, heartbeat, start session, end, then command -> 400
+        dev = admin_session.post(f"{BASE_URL}/api/devices",
+                                 json={"name": f"TEST_ENDED_{uuid.uuid4().hex[:6]}", "os": "linux"}).json()
+        admin_session.post(f"{BASE_URL}/api/devices/{dev['id']}/heartbeat")
+        sess = admin_session.post(f"{BASE_URL}/api/sessions",
+                                  json={"device_id": dev["id"]}).json()
+        admin_session.post(f"{BASE_URL}/api/sessions/{sess['id']}/end")
+        r = admin_session.post(
+            f"{BASE_URL}/api/sessions/{sess['id']}/command",
+            json={"action": "mouse_click", "x": 0.5, "y": 0.5}, timeout=20,
+        )
+        assert r.status_code == 400
+        admin_session.delete(f"{BASE_URL}/api/devices/{dev['id']}")
+
+    def test_full_command_flow_poll_and_ack(self, admin_session, agent_and_session):
+        ctx = agent_and_session
+        sid = ctx["session_id"]
+        did = ctx["device_id"]
+        secret = ctx["agent_secret"]
+
+        # poll wrong secret -> 401
+        r = requests.post(f"{BASE_URL}/api/agent/commands/poll",
+                          json={"device_id": did, "agent_secret": "WRONG"}, timeout=20)
+        assert r.status_code == 401
+
+        # queue 3 commands
+        payloads = [
+            {"action": "mouse_move", "x": 0.1, "y": 0.2},
+            {"action": "key_type", "text": "hello"},
+            {"action": "hotkey", "keys": ["ctrl", "alt", "del"]},
+        ]
+        cmd_ids = []
+        for p in payloads:
+            r = admin_session.post(f"{BASE_URL}/api/sessions/{sid}/command", json=p, timeout=20)
+            assert r.status_code == 200, r.text
+            j = r.json()
+            assert j["status"] == "pending"
+            assert j["action"] == p["action"]
+            assert j["device_id"] == did
+            cmd_ids.append(j["id"])
+
+        # poll with correct secret -> returns all 3
+        r = requests.post(f"{BASE_URL}/api/agent/commands/poll",
+                          json={"device_id": did, "agent_secret": secret}, timeout=20)
+        assert r.status_code == 200
+        cmds = r.json()["commands"]
+        assert len(cmds) == 3
+        returned_ids = {c["id"] for c in cmds}
+        assert returned_ids == set(cmd_ids)
+        # ordering by created_at asc
+        assert [c["action"] for c in cmds] == ["mouse_move", "key_type", "hotkey"]
+        # params preserved
+        assert cmds[0]["params"].get("x") == 0.1
+        assert cmds[1]["params"].get("text") == "hello"
+        assert cmds[2]["params"].get("keys") == ["ctrl", "alt", "del"]
+
+        # poll again -> empty (commands marked delivered)
+        r = requests.post(f"{BASE_URL}/api/agent/commands/poll",
+                          json={"device_id": did, "agent_secret": secret}, timeout=20)
+        assert r.status_code == 200
+        assert r.json()["commands"] == []
+
+        # ack the first two as ok=True, the third as ok=False
+        for cid in cmd_ids[:2]:
+            r = requests.post(f"{BASE_URL}/api/agent/commands/ack",
+                              json={"device_id": did, "agent_secret": secret,
+                                    "cmd_id": cid, "ok": True}, timeout=20)
+            assert r.status_code == 200
+            assert r.json().get("ok") is True
+
+        r = requests.post(f"{BASE_URL}/api/agent/commands/ack",
+                          json={"device_id": did, "agent_secret": secret,
+                                "cmd_id": cmd_ids[2], "ok": False, "error": "pyautogui missing"},
+                          timeout=20)
+        assert r.status_code == 200
+
+        # ack with wrong secret -> 401
+        r = requests.post(f"{BASE_URL}/api/agent/commands/ack",
+                          json={"device_id": did, "agent_secret": "WRONG",
+                                "cmd_id": cmd_ids[0], "ok": True}, timeout=20)
+        assert r.status_code == 401
+
+
+class TestWindowsInstaller:
+    def test_installer_returns_powershell(self):
+        r = requests.get(f"{BASE_URL}/api/agent/installer/windows", timeout=20)
+        assert r.status_code == 200
+        ctype = r.headers.get("content-type", "")
+        assert "text/plain" in ctype.lower(), f"got: {ctype}"
+        first_line = r.text.splitlines()[0] if r.text else ""
+        assert first_line.startswith("# RustAdmin Agent"), f"first line: {first_line!r}"
+        assert "Windows Installer" in first_line

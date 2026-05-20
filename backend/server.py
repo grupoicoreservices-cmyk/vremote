@@ -603,6 +603,9 @@ class AgentRegisterIn(BaseModel):
     os: Literal["windows", "linux", "macos", "android", "ios"] = "windows"
     ip: Optional[str] = None
     version: Optional[str] = "agent-py-1.0"
+    screen_width: Optional[int] = None
+    screen_height: Optional[int] = None
+    can_control: Optional[bool] = False
 
 
 class AgentAuthBase(BaseModel):
@@ -611,11 +614,34 @@ class AgentAuthBase(BaseModel):
 
 
 class AgentHeartbeatIn(AgentAuthBase):
-    pass
+    screen_width: Optional[int] = None
+    screen_height: Optional[int] = None
+    can_control: Optional[bool] = None
 
 
 class AgentScreenshotIn(AgentAuthBase):
     image_base64: str
+    screen_width: Optional[int] = None
+    screen_height: Optional[int] = None
+
+
+class CommandIn(BaseModel):
+    action: Literal[
+        "mouse_move", "mouse_click", "mouse_dblclick", "mouse_down", "mouse_up",
+        "scroll", "key_type", "key_press", "hotkey",
+    ]
+    x: Optional[float] = None  # 0..1 relative
+    y: Optional[float] = None
+    button: Optional[str] = "left"
+    text: Optional[str] = None
+    keys: Optional[List[str]] = None
+    amount: Optional[int] = None
+
+
+class CommandAckIn(AgentAuthBase):
+    cmd_id: str
+    ok: bool = True
+    error: Optional[str] = None
 
 
 async def _auth_agent(device_id: str, agent_secret: str) -> dict:
@@ -654,6 +680,9 @@ async def agent_register(body: AgentRegisterIn):
         "agent_secret": agent_secret,
         "last_screenshot": None,
         "last_screenshot_at": None,
+        "screen_width": body.screen_width,
+        "screen_height": body.screen_height,
+        "can_control": bool(body.can_control),
     }
     await db.devices.insert_one(doc)
     await log_event(f"agent:{tok['label']}", "agent.register", target=doc["rust_id"])
@@ -668,10 +697,14 @@ async def agent_register(body: AgentRegisterIn):
 @api.post("/agent/heartbeat")
 async def agent_heartbeat(body: AgentHeartbeatIn):
     await _auth_agent(body.device_id, body.agent_secret)
-    await db.devices.update_one(
-        {"id": body.device_id},
-        {"$set": {"status": "online", "last_seen": now_iso()}},
-    )
+    updates = {"status": "online", "last_seen": now_iso()}
+    if body.screen_width:
+        updates["screen_width"] = body.screen_width
+    if body.screen_height:
+        updates["screen_height"] = body.screen_height
+    if body.can_control is not None:
+        updates["can_control"] = bool(body.can_control)
+    await db.devices.update_one({"id": body.device_id}, {"$set": updates})
     return {"ok": True, "server_time": now_iso()}
 
 
@@ -680,15 +713,17 @@ async def agent_screenshot(body: AgentScreenshotIn):
     await _auth_agent(body.device_id, body.agent_secret)
     if len(body.image_base64) > 4_000_000:
         raise HTTPException(status_code=413, detail="Imagem muito grande")
-    await db.devices.update_one(
-        {"id": body.device_id},
-        {"$set": {
-            "last_screenshot": body.image_base64,
-            "last_screenshot_at": now_iso(),
-            "status": "online",
-            "last_seen": now_iso(),
-        }},
-    )
+    updates = {
+        "last_screenshot": body.image_base64,
+        "last_screenshot_at": now_iso(),
+        "status": "online",
+        "last_seen": now_iso(),
+    }
+    if body.screen_width:
+        updates["screen_width"] = body.screen_width
+    if body.screen_height:
+        updates["screen_height"] = body.screen_height
+    await db.devices.update_one({"id": body.device_id}, {"$set": updates})
     return {"ok": True}
 
 
@@ -696,14 +731,68 @@ async def agent_screenshot(body: AgentScreenshotIn):
 async def device_screenshot(device_id: str, user: dict = Depends(get_current_user)):
     d = await db.devices.find_one(
         {"id": device_id},
-        {"_id": 0, "last_screenshot": 1, "last_screenshot_at": 1},
+        {"_id": 0, "last_screenshot": 1, "last_screenshot_at": 1, "screen_width": 1, "screen_height": 1, "can_control": 1},
     )
     if not d:
         raise HTTPException(status_code=404, detail="Não encontrado")
     return {
         "image_base64": d.get("last_screenshot"),
         "captured_at": d.get("last_screenshot_at"),
+        "screen_width": d.get("screen_width"),
+        "screen_height": d.get("screen_height"),
+        "can_control": d.get("can_control", False),
     }
+
+
+# ---------- Remote Control Commands ----------
+@api.post("/sessions/{session_id}/command")
+async def queue_command(session_id: str, body: CommandIn, user: dict = Depends(get_current_user)):
+    sess = await db.sessions.find_one({"id": session_id}, {"_id": 0})
+    if not sess:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada")
+    if sess["status"] != "active":
+        raise HTTPException(status_code=400, detail="Sessão não está ativa")
+    cmd = {
+        "id": str(uuid.uuid4()),
+        "device_id": sess["device_id"],
+        "session_id": session_id,
+        "action": body.action,
+        "params": body.model_dump(exclude_none=True, exclude={"action"}),
+        "status": "pending",
+        "created_at": now_iso(),
+        "by": user["email"],
+    }
+    await db.agent_commands.insert_one(cmd)
+    cmd.pop("_id", None)
+    return cmd
+
+
+@api.post("/agent/commands/poll")
+async def agent_poll_commands(body: AgentAuthBase):
+    await _auth_agent(body.device_id, body.agent_secret)
+    cmds = await db.agent_commands.find(
+        {"device_id": body.device_id, "status": "pending"}, {"_id": 0}
+    ).sort("created_at", 1).limit(50).to_list(50)
+    if cmds:
+        ids = [c["id"] for c in cmds]
+        await db.agent_commands.update_many(
+            {"id": {"$in": ids}}, {"$set": {"status": "delivered", "delivered_at": now_iso()}}
+        )
+    return {"commands": cmds}
+
+
+@api.post("/agent/commands/ack")
+async def agent_ack_command(body: CommandAckIn):
+    await _auth_agent(body.device_id, body.agent_secret)
+    await db.agent_commands.update_one(
+        {"id": body.cmd_id},
+        {"$set": {
+            "status": "done" if body.ok else "failed",
+            "error": body.error,
+            "completed_at": now_iso(),
+        }},
+    )
+    return {"ok": True}
 
 
 @api.get("/agent/script", response_class=None)
@@ -714,6 +803,16 @@ async def agent_script_download():
     if not path.exists():
         raise HTTPException(status_code=404, detail="Script não encontrado")
     return FileResponse(str(path), media_type="text/x-python", filename="rustadmin_agent.py")
+
+
+@api.get("/agent/installer/windows", response_class=None)
+async def agent_installer_windows():
+    """Serve the PowerShell installer for Windows."""
+    from fastapi.responses import FileResponse
+    path = ROOT_DIR.parent / "agent" / "install_windows.ps1"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Instalador não encontrado")
+    return FileResponse(str(path), media_type="text/plain", filename="install_windows.ps1")
 
 
 # ---------- Startup: Seed ----------

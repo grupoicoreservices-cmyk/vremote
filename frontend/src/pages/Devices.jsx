@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/table";
 import { Plus, MoreHorizontal, MonitorSmartphone, Server, Smartphone, Apple, Plug, Search } from "lucide-react";
 import { toast } from "sonner";
+import RemoteControl from "@/components/RemoteControl";
 
 const SCREEN_MOCK = "https://static.prod-images.emergentagent.com/jobs/539a4407-7ab7-4ef7-aae7-fc6df8facf83/images/c17222935a415163ef8706df95796192d9cd0349e0697954644b12d5afb97e31.png";
 
@@ -111,11 +112,7 @@ export default function Devices() {
     try {
       const { data } = await api.post("/sessions", { device_id: device.id, note: "Conexão iniciada via painel" });
       toast.success(`Sessão #${data.id.slice(0,6)} iniciada`);
-      setOpenConnect({ device, session: data, screenshot: null });
-      // try to fetch the latest real screenshot from agent
-      api.get(`/devices/${device.id}/screenshot`).then((r) => {
-        setOpenConnect((prev) => prev ? { ...prev, screenshot: r.data } : null);
-      }).catch(() => {});
+      setOpenConnect({ device, session: data });
     } catch (e) {
       toast.error(formatApiErrorDetail(e?.response?.data?.detail));
     }
@@ -289,52 +286,27 @@ export default function Devices() {
       </div>
 
       <Dialog open={!!openConnect} onOpenChange={(o) => !o && setOpenConnect(null)}>
-        <DialogContent className="bg-neutral-950 border-neutral-800 rounded-sm max-w-4xl">
+        <DialogContent className="bg-neutral-950 border-neutral-800 rounded-sm max-w-5xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               <span className="pulse-dot bg-green-500 text-green-500" />
-              Sessão Ao Vivo · {openConnect?.device.name}
+              Sessão · {openConnect?.device.name}
             </DialogTitle>
             <DialogDescription className="text-neutral-500 font-mono text-xs">
               {openConnect?.device.rust_id} · {openConnect?.device.ip} · operador: {openConnect?.session.operator_email}
             </DialogDescription>
           </DialogHeader>
-          <div className="relative border border-neutral-800 rounded-sm overflow-hidden bg-black">
-            {openConnect?.screenshot?.image_base64 ? (
-              <img
-                src={`data:image/jpeg;base64,${openConnect.screenshot.image_base64}`}
-                alt="agent screenshot"
-                className="w-full h-auto"
-                data-testid="live-screenshot-real"
-              />
-            ) : (
-              <img src={SCREEN_MOCK} alt="screen preview" className="w-full h-auto" data-testid="live-screenshot-mock" />
-            )}
-            <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-black/70 border border-green-500/50 px-2 py-1 font-mono text-[10px] text-green-500">
-              <span className="pulse-dot bg-green-500 text-green-500 !w-1.5 !h-1.5" />
-              {openConnect?.screenshot?.image_base64 ? "LIVE · agent" : "DEMO · sem agente"}
-            </div>
-            {openConnect?.screenshot?.captured_at && (
-              <div className="absolute bottom-2 left-2 bg-black/70 border border-neutral-800 px-2 py-1 font-mono text-[10px] text-neutral-400">
-                capturado: {new Date(openConnect.screenshot.captured_at).toLocaleString("pt-BR")}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10 rounded-sm"
-              data-testid="session-end-btn"
-              onClick={async () => {
-                if (!openConnect) return;
+          {openConnect && (
+            <RemoteControl
+              device={openConnect.device}
+              session={openConnect.session}
+              onEnd={async () => {
                 await api.post(`/sessions/${openConnect.session.id}/end`);
                 toast.success("Sessão encerrada");
                 setOpenConnect(null);
               }}
-            >
-              Encerrar sessão
-            </Button>
-          </DialogFooter>
+            />
+          )}
         </DialogContent>
       </Dialog>
     </>

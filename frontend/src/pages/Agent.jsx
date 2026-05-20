@@ -23,6 +23,7 @@ export default function Agent() {
   }, []);
 
   const downloadUrl = `${BACKEND_URL}/api/agent/script`;
+  const installerUrl = `${BACKEND_URL}/api/agent/installer/windows`;
   const runCmd = selectedToken
     ? `python rustadmin_agent.py --server ${BACKEND_URL} --token ${selectedToken}`
     : `python rustadmin_agent.py --server ${BACKEND_URL} --token <SEU_TOKEN>`;
@@ -32,11 +33,15 @@ export default function Agent() {
     toast.success("Copiado");
   };
 
+  // One-line installer (admin PowerShell):
+  const oneLineToken = selectedToken || "<SEU_TOKEN>";
+  const winInstallerCmd = `iwr -useb "${installerUrl}" -OutFile "$env:TEMP\\install_rustadmin.ps1"; & "$env:TEMP\\install_rustadmin.ps1" -Server "${BACKEND_URL}" -Token "${oneLineToken}"`;
+
   const winCmd = `# 1) Baixe o script
 Invoke-WebRequest -Uri "${downloadUrl}" -OutFile "rustadmin_agent.py"
 
-# 2) Instale dependências
-pip install requests mss pillow
+# 2) Instale dependências (controle remoto requer pyautogui)
+pip install requests mss pillow pyautogui
 
 # 3) Execute (substitua o token)
 ${runCmd}`;
@@ -45,10 +50,16 @@ ${runCmd}`;
 curl -O ${downloadUrl}
 
 # 2) Instale dependências
-pip3 install requests mss pillow
+pip3 install requests mss pillow pyautogui
 
 # 3) Execute
 ${runCmd}`;
+
+  const exeCmd = `pip install pyinstaller
+pyinstaller --onefile --noconsole --name rustadmin-agent rustadmin_agent.py
+# Resultado em: dist\\rustadmin-agent.exe
+# Você pode então distribuir o .exe único e rodar:
+.\\dist\\rustadmin-agent.exe --server ${BACKEND_URL} --token ${oneLineToken}`;
 
   return (
     <>
@@ -144,8 +155,42 @@ ${runCmd}`;
           </div>
 
           <div className="p-6 space-y-6">
-            <CmdBlock title="Windows (PowerShell)" cmd={winCmd} onCopy={() => copy(winCmd)} testid="cmd-windows" />
+            {/* Windows one-line installer (recommended) */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium text-neutral-50 flex items-center gap-2">
+                  Windows · instalação automática
+                  <Badge variant="outline" className="rounded-sm border-green-500/40 text-green-500 text-[10px] font-mono">RECOMENDADO</Badge>
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => copy(winInstallerCmd)} className="h-7 text-xs text-neutral-400 hover:text-green-500" data-testid="cmd-win-installer">
+                  <Copy className="w-3 h-3 mr-1" /> Copiar
+                </Button>
+              </div>
+              <p className="text-xs text-neutral-500 mb-2">
+                Abra o <strong>PowerShell como Administrador</strong> e cole. O script baixa o agente, instala as dependências e registra uma <strong>Tarefa Agendada</strong> que inicia o agente automaticamente no logon (igual ao RustDesk).
+              </p>
+              <pre className="bg-neutral-950 border border-neutral-800 rounded-sm p-4 text-[12px] font-mono leading-relaxed text-green-400 overflow-x-auto whitespace-pre-wrap">
+                {winInstallerCmd}
+              </pre>
+            </div>
+
+            <CmdBlock title="Windows · manual (sem instalador)" cmd={winCmd} onCopy={() => copy(winCmd)} testid="cmd-windows" />
             <CmdBlock title="Linux / macOS" cmd={linuxCmd} onCopy={() => copy(linuxCmd)} testid="cmd-linux" />
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium text-neutral-50">Gerar executável único (.exe)</div>
+                <Button size="sm" variant="ghost" onClick={() => copy(exeCmd)} className="h-7 text-xs text-neutral-400 hover:text-green-500" data-testid="cmd-exe">
+                  <Copy className="w-3 h-3 mr-1" /> Copiar
+                </Button>
+              </div>
+              <p className="text-xs text-neutral-500 mb-2">
+                Rode estes comandos numa máquina Windows com Python instalado. Gera <span className="font-mono text-neutral-300">rustadmin-agent.exe</span> standalone (sem console, sem dependências externas) que você pode distribuir.
+              </p>
+              <pre className="bg-neutral-950 border border-neutral-800 rounded-sm p-4 text-[12px] font-mono leading-relaxed text-neutral-300 overflow-x-auto whitespace-pre-wrap">
+                {exeCmd}
+              </pre>
+            </div>
           </div>
         </Card>
 
@@ -161,11 +206,12 @@ ${runCmd}`;
                 <li>O agente envia <span className="font-mono text-green-500">POST /api/agent/register</span> com o token.</li>
                 <li>O painel devolve um <span className="font-mono">device_id</span> + <span className="font-mono">agent_secret</span> e salva em <span className="font-mono">~/.rustadmin_agent.json</span>.</li>
                 <li>A máquina aparece em <a href="/devices" className="text-green-500 underline">Dispositivos</a> com status <span className="text-green-500 font-mono">online</span>.</li>
-                <li>A cada 30s, o agente envia uma screenshot. Clique em <strong>Conectar</strong> no dispositivo para ver em tempo quase real.</li>
-                <li>Pressione <span className="font-mono">Ctrl+C</span> para parar. O status muda para <span className="text-neutral-400 font-mono">offline</span> em ~1 min.</li>
+                <li>Clique em <strong>Conectar</strong>. O agente começa a enviar screenshots a cada 3s e recebe comandos (mouse/teclado) que o painel envia.</li>
+                <li>Click esquerdo, click direito, duplo clique, scroll, digitar texto, <span className="font-mono">Ctrl+Alt+Del</span>, <span className="font-mono">Win</span>, <span className="font-mono">Esc</span> — tudo funciona se o agente tiver <span className="font-mono text-green-500">pyautogui</span> instalado.</li>
+                <li>Sem <span className="font-mono">pyautogui</span> o modo cai para <strong>view-only</strong>.</li>
               </ol>
               <p className="text-xs text-amber-500 font-mono pt-2">
-                ⚠ As screenshots ficam armazenadas no servidor. Use apenas em máquinas que você tem autorização para acessar.
+                ⚠ As screenshots e comandos passam pelo servidor. Use apenas em máquinas que você tem autorização para acessar e controlar.
               </p>
             </div>
           </div>
