@@ -429,7 +429,7 @@ class VRemoteClient:
                 time.sleep(10)
                 continue
             active = (time.time() - self.last_command_at) < 20
-            interval = 3 if active else 30
+            interval = 2 if active else 5
             try:
                 with mss.mss() as sct:
                     mon = sct.monitors[1]

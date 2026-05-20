@@ -54,11 +54,11 @@ except Exception:
 
 CONFIG_FILE = Path.home() / ".vremote_agent.json"
 HEARTBEAT_INTERVAL = 15
-SCREENSHOT_INTERVAL = 3        # active streaming when control session is open
-SCREENSHOT_IDLE_INTERVAL = 30  # when no commands recently
-COMMAND_POLL_INTERVAL = 0.8
+SCREENSHOT_INTERVAL = 2        # active streaming when control session is open
+SCREENSHOT_IDLE_INTERVAL = 5   # always send every 5s so the panel feels live
+COMMAND_POLL_INTERVAL = 0.6
 
-STREAMING_WINDOW_SEC = 20      # stay in "active stream" for N seconds after last command
+STREAMING_WINDOW_SEC = 20
 
 
 # ---- Utility ----------------------------------------------------------------

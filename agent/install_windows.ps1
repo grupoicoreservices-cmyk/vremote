@@ -52,7 +52,11 @@ try {
 # 4) Instala dependências
 Write-Host "Instalando dependências Python (requests, mss, pillow, pyautogui)..."
 & python -m pip install --user --upgrade --quiet pip
-& python -m pip install --user --quiet requests mss pillow pyautogui
+& python -m pip install --user --upgrade --force-reinstall --quiet requests mss pillow pyautogui
+$pyTest = & python -c "import pyautogui; print('OK')" 2>&1
+if ($pyTest -notmatch "OK") {
+    Write-Host "[AVISO] pyautogui falhou: $pyTest" -ForegroundColor Yellow
+}
 Write-Host "[OK] Dependências instaladas" -ForegroundColor Green
 
 # 5) Tarefa Agendada

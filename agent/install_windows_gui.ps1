@@ -36,7 +36,14 @@ Write-Host "[OK] Cliente salvo em $scriptPath" -ForegroundColor Green
 
 Write-Host "Instalando dependências..."
 & python -m pip install --user --upgrade --quiet pip
-& python -m pip install --user --quiet requests mss pillow pyautogui
+& python -m pip install --user --upgrade --force-reinstall --quiet requests mss pillow pyautogui
+# Verifica que pyautogui realmente importa
+$pyTest = & python -c "import pyautogui; print('OK')" 2>&1
+if ($pyTest -notmatch "OK") {
+    Write-Host "[AVISO] pyautogui falhou ao importar: $pyTest" -ForegroundColor Yellow
+    Write-Host "Tentando instalar dependências de sistema..." -ForegroundColor Yellow
+    & python -m pip install --user --upgrade --force-reinstall pyautogui pyscreeze pillow 2>&1 | Out-Null
+}
 Write-Host "[OK] Dependências instaladas" -ForegroundColor Green
 
 # Use pythonw.exe para esconder o console
