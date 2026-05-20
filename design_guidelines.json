@@ -1,0 +1,111 @@
+{
+  "project_name": "RustDesk Pro Style Remote Access Panel",
+  "theme": "dark",
+  "archetype": "Control Room / Retro-Futurism (Archetype 4 & 5 hybrid)",
+  "language": "pt-BR",
+  "design_philosophy": {
+    "core_principles": [
+      "Terminal-inspired aesthetics: Precision, control, and absolute clarity.",
+      "No 'AI slop' gradients. Strict, utilitarian dark mode with high-contrast sharp accents.",
+      "Data density: Maximize screen real estate using 'Control Room' grid patterns (gap-4).",
+      "Asymmetry and strict left-alignment. Focus on hierarchy rather than centered decoration."
+    ]
+  },
+  "colors": {
+    "background": {
+      "base": "bg-neutral-950",
+      "hex": "#0A0A0A",
+      "description": "Deep obsidian black to ground the terminal feel."
+    },
+    "surface": {
+      "base": "bg-neutral-900",
+      "hover": "hover:bg-neutral-800",
+      "hex": "#171717",
+      "description": "Flat, non-glassy surfaces for widgets and cards. 1px borders, no soft drop shadows."
+    },
+    "primary": {
+      "base": "text-green-500",
+      "bg": "bg-green-500",
+      "hex": "#22C55E",
+      "description": "Terminal Green. Used strictly for 'Online' status, active connections, and primary CTAs."
+    },
+    "warning": {
+      "base": "text-amber-500",
+      "bg": "bg-amber-500",
+      "hex": "#F59E0B",
+      "description": "Signal Amber. Used for warnings, offline statuses, and critical logs."
+    },
+    "text": {
+      "primary": "text-neutral-50",
+      "secondary": "text-neutral-400",
+      "muted": "text-neutral-500"
+    },
+    "border": {
+      "base": "border-neutral-800",
+      "focus": "ring-green-500/50"
+    }
+  },
+  "typography": {
+    "rules": [
+      "Absolutely NO Inter, Roboto, or Space Grotesk.",
+      "Headings and UI text must use a technical, grotesque sans-serif.",
+      "IDs (9-digit), IPs, Logs, and metrics MUST use monospace."
+    ],
+    "families": {
+      "ui": "IBM Plex Sans, sans-serif",
+      "mono": "IBM Plex Mono, JetBrains Mono, monospace"
+    },
+    "scales": {
+      "h1": "text-3xl sm:text-4xl tracking-tight font-medium",
+      "h2": "text-2xl sm:text-3xl tracking-tight",
+      "h3": "text-lg sm:text-xl",
+      "body": "text-sm sm:text-base text-neutral-200 leading-relaxed",
+      "mono_data": "text-sm font-mono tracking-wider",
+      "labels": "text-xs uppercase tracking-[0.2em] text-neutral-500 font-medium"
+    }
+  },
+  "layout_and_spacing": {
+    "strategy": "Control Room Grid",
+    "details": [
+      "Use dense padding: p-4 to p-6 for widgets.",
+      "Gaps: Tight grid-gaps (gap-4 or gap-6) to ensure every pixel is utilized.",
+      "Borders: Heavy use of 1px solid borders (border-neutral-800) instead of card shadows to separate content.",
+      "Radii: Minimal. Use rounded-sm (2px) or rounded-md (4px) maximum. No pill-shaped elements unless specifically requested by Shadcn."
+    ]
+  },
+  "components_strategy": {
+    "sidebar": "Collapsible left sidebar. Dense navigation links with Phosphor icons. Active states should have a harsh left border (e.g., border-l-2 border-green-500) rather than full background highlighting.",
+    "topbar": "Minimal. Contains Cmd+K (Command Palette) search simulation, user profile dropdown, and breadcrumbs.",
+    "dashboard_kpis": "Mode B grid. Single metric summary cards (col-span-1) with a large mono-font number and an accompanying sparkline or icon.",
+    "data_tables": "Flat style. border-collapse. Row hover states should slightly elevate background to bg-neutral-800. Status columns (Online/Offline) must have a pulsing 8px dot (green/amber).",
+    "forms_inputs": "Shadcn-based but brutalist. Background transparent, strictly bordered. Focus rings must be sharp green (ring-1 ring-green-500).",
+    "dialogs_sheets": "Use for Screen Preview (mock) and edit forms. Dark overlay (bg-black/80 backdrop-blur-sm). Dialog content uses bg-neutral-950 with 1px border-neutral-800.",
+    "address_book": "Bento or Grid format grouping devices by tags. Use Badge components heavily for tags.",
+    "audit_logs": "Terminal-like output style. Time (mono), Event Type (badge), Target (mono), User. Use Shadcn Calendar for date filtering."
+  },
+  "animations": {
+    "rules": [
+      "Minimalist and functional. No bouncy or playful animations.",
+      "Status indicators (Online): Use an infinite subtle scale/opacity pulse on the green dot (animate-pulse or custom ping).",
+      "Hover states: Instant or extremely fast transitions (duration-150)."
+    ]
+  },
+  "image_urls": {
+    "login_background": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/539a4407-7ab7-4ef7-aae7-fc6df8facf83/images/7b2a7aca4c56fb6410a6cda88e8da4092eb2c67c535b41ed930cc95ba6cd83ae.png",
+      "description": "Abstract minimalist data center, dark cinematic lighting, glowing amber and green fiber optic cables. Use this as a moody background for the JWT Login screen, with a dark overlay (bg-black/60).",
+      "category": "background"
+    },
+    "screen_preview_mock": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/539a4407-7ab7-4ef7-aae7-fc6df8facf83/images/c17222935a415163ef8706df95796192d9cd0349e0697954644b12d5afb97e31.png",
+      "description": "High resolution screenshot of a modern IDE/Linux terminal. Use this inside a Dialog modal to 'mock' the live screen preview of a remote session.",
+      "category": "product"
+    },
+    "server_room_reference": {
+      "url": "https://images.pexels.com/photos/17323801/pexels-photo-17323801.jpeg",
+      "description": "Alternative modern server room image if needed for marketing/auth sides.",
+      "category": "reference"
+    }
+  },
+  "testing_attributes": "All interactive elements, buttons, nav links, table rows, and form inputs MUST include 'data-testid' attributes (e.g., data-testid='login-submit-button', data-testid='device-connect-btn')."
+}
