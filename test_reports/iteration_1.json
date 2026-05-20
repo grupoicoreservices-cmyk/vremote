@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 1: End-to-end backend + frontend smoke test of RustAdmin remote-access management panel. Discovered and fixed two MongoDB ObjectId leakage bugs (POST /api/address-book and GET /api/server-config returning 500). After fixes, ALL 15 backend pytest cases pass (auth, dashboard, devices CRUD/heartbeat/search/filter, sessions lifecycle + offline guard, users CRUD with admin-only RBAC verified via real operator login, audit log prefix filter, access tokens, address book, server config). Frontend login + navigation across all 8 sidebar pages (Dashboard, Devices, Sessions, Address Book, Audit Logs, Users, Access Tokens, Settings) works without errors; Devices Connect modal opens with the mocked live-preview image and 'Encerrar sessão' button.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/address-book", "issue": "Was returning 500 due to ObjectId leak (`return {**doc}` after motor insert_one mutated doc). FIXED by popping `_id` before return."},
+      {"endpoint": "GET /api/server-config", "issue": "Was returning 500 on first-ever call (no row yet) because default cfg inserted then returned still had injected `_id`. FIXED by popping `_id` after insert."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts console warning: ResponsiveContainer reports width(-1)/height(-1). Likely parent has no explicit min-height on initial render before metrics load. Charts do eventually render once data arrives; consider adding minHeight on the chart wrapper to silence the warning and avoid layout flash."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Add minHeight to dashboard ResponsiveContainer wrappers to remove recharts width/height(-1) console warnings.",
+    "OPTIONAL: backend/.env has CORS_ORIGINS=\"*\" but server.py ignores it and hard-codes [FRONTEND_URL, http://localhost:3000]. Production FRONTEND_URL in backend/.env (aeecbd55-...) differs from the active REACT_APP_BACKEND_URL host (remote-access-hub-18...). Browser flows still work because the same Kubernetes ingress is used and credentialed requests came through OK, but consider syncing FRONTEND_URL with the current preview host to avoid future CORS surprises."
+  ],
+  "critical_code_review_comments": [
+    "MongoDB ObjectId leak pattern: Anywhere code returns a doc immediately after motor `insert_one`, the dict gets a non-serializable `_id` field. Found 2 occurrences (now fixed). Recommend wrapping inserts in a small helper that strips `_id` post-insert, or always re-fetching with `{_id: 0}` projection.",
+    "Lockout fixture: `login_attempts` uses `ip:email` identifier and 15-min lockout. Tests for invalid login use unique emails to avoid blocking admin. Verify production rate-limiter doesn't lock real users out unexpectedly during legitimate retries.",
+    "server.py is ~720 lines; per code-review guideline (>700 lines) splitting into modules (auth.py, devices.py, sessions.py, etc.) would improve maintainability."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (2 small ObjectId pop fixes)",
+    "/app/backend/tests/backend_test.py (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% smoke (login + all 8 nav pages + connect modal)"},
+  "test_credentials": "admin@rustadmin.io / Admin@2026 (seeded, verified working)",
+  "seed_data_creation": "Seed data verified: 10 devices, multiple sessions (1 active + 6 ended), 10+ audit logs auto-created on startup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend stable at 15/15. Mocked items (per request): bandwidth_series random data, Connect modal shows static image. No real WebRTC. Auth uses httpOnly cookies + Authorization Bearer fallback (tests use Bearer to bypass cookie-domain quirks). FRONTEND_URL in backend/.env != REACT_APP_BACKEND_URL but CORS still permissive enough for current preview.",
+  "rca of the issue": "Both 500 errors had identical RCA — motor's `insert_one(doc)` mutates the passed dict in-place by adding an `ObjectId _id`. The two endpoints then returned that mutated dict directly (`return {**doc}` / `return cfg`), bypassing the usual `find_one(..., {'_id': 0})` projection guard. FastAPI's jsonable_encoder failed with `TypeError: 'ObjectId' object is not iterable`. Fix: pop `_id` from the dict after insert before returning. Reproduction: hit POST /api/address-book or GET /api/server-config on a fresh DB. Mitigation applied + verified via pytest re-run."
+}
