@@ -41,8 +41,8 @@ export default function Agent() {
   const winInstallerCmd = `iwr -useb "${installerUrl}" -OutFile "$env:TEMP\\install_vremote.ps1"; & "$env:TEMP\\install_vremote.ps1" -Server "${BACKEND_URL}" -Token "${oneLineToken}"`;
   const winGuiInstallerCmd = `iwr -useb "${guiInstallerUrl}" -OutFile "$env:TEMP\\install_vremote_gui.ps1"; & "$env:TEMP\\install_vremote_gui.ps1" -Server "${BACKEND_URL}"`;
   const exeGuiCmd = `pip install pyinstaller
-pyinstaller --onefile --noconsole --name V-remoteClient vremote_client.py
-# Resultado: dist\\V-remoteClient.exe (sem console, com janela GUI)
+pyinstaller --onefile --noconsole --name VRemoteClient vremote_client.py
+# Resultado: dist\\VRemoteClient.exe (sem console, com janela GUI)
 # Distribua este .exe único — não precisa instalar Python no PC do usuário final.`;
 
   const winCmd = `# 1) Baixe o script
