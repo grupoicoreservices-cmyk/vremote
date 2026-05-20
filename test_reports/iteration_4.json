@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 4 — Added 2 new backend pytest cases (TestGuiClient::test_gui_client_download + test_gui_installer_download) covering GET /api/agent/client (returns python text/x-python with #!/usr/bin/env python3 shebang and 'RustAdmin Client (GUI)' marker) and GET /api/agent/installer/windows-gui (text/plain, starts with '# RustAdmin Client (GUI)'). Full suite is 26/26 PASS, including all 24 regression tests from iter 1-3 (auth, dashboard, devices, sessions, users RBAC, audit logs, tokens, address book, server config, agent register/heartbeat/screenshot/script, remote-control command flow, Windows headless installer). Frontend smoke-tested on /agent: Tabs structure works, 'Cliente com Interface' is the default tab and contains the three required testids (cmd-win-gui-installer, download-client-btn, cmd-exe-gui); the GUI installer one-liner correctly references /api/agent/installer/windows-gui and does NOT contain the access token (user enters it in the GUI wizard); the download-client-btn anchor points to /api/agent/client. Switching to 'Agente Headless' tab reveals all previous testids (cmd-win-installer, cmd-windows, cmd-linux, cmd-exe, download-agent-btn) and the token picker still interpolates the selected token into the headless installer command.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard (carry-over)", "issues": ["Recharts width(-1)/height(-1) console warnings still present from iter 1/2/3 — add minHeight on the chart's ResponsiveContainer."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (carry-over from iter 3): server.py is ~945 lines — split into routers (devices, sessions, users, agent).",
+    "OPTIONAL (carry-over from iter 3): /api/agent/script, /api/agent/installer/windows, /api/agent/client, /api/agent/installer/windows-gui are all completely public. Consider rate-limiting; security risk is low because the agent itself still needs a valid access-token at register time.",
+    "OPTIONAL (carry-over from iter 3): POST /api/sessions/{id}/command does not enforce ownership of the session by the operator.",
+    "OPTIONAL (carry-over from iter 3): poll marks commands 'delivered' before agent ack — visibility-timeout / retry pattern would be safer.",
+    "OPTIONAL (carry-over from iter 3): silence Recharts width(-1)/height(-1) warnings."
+  ],
+  "critical_code_review_comments": [
+    "Tkinter GUI client (rustadmin_client.py) cannot be smoke-tested headlessly in this container (no display). Reviewed code statically — setup wizard, main view (big ID, status, toggle, log), 3 background loops (heartbeat, screenshot, command poll/exec/ack) all present and use the same /api/agent/* endpoints already covered by backend tests. Recommend a Windows manual QA pass before shipping.",
+    "rustadmin_client.py stores agent_secret in plaintext at ~/.rustadmin_client.json — same pattern as the headless agent, acceptable for v1 but document it.",
+    "PowerShell installer install_windows_gui.ps1 should be verified by hand on a real Windows box (shortcut creation via WScript.Shell + pythonw.exe path resolution can fail silently on minimal Python installs).",
+    "Carry-over: server.py size, public installer endpoints, session ownership on commands, visibility timeout on poll/ack."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (added TestGuiClient class with 2 new tests; existing 24 tests untouched)"
+  ],
+  "success_rate": {"backend": "100% (26/26)", "frontend": "100% smoke (login OK, /agent loads, both tabs present, default 'Cliente com Interface' shows cmd-win-gui-installer + download-client-btn pointing at /api/agent/client + cmd-exe-gui, GUI installer one-liner correctly omits token, headless tab shows cmd-win-installer/cmd-windows/cmd-linux/cmd-exe/download-agent-btn, token picker still interpolates selected token into headless installer command)"},
+  "test_credentials": "admin@rustadmin.io / Admin@2026 (verified working)",
+  "seed_data_creation": "Only ephemeral TEST_-prefixed access tokens/devices/sessions created by individual tests; all cleaned up in fixture teardowns. No new persistent seed data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter 4 added GUI client (Tkinter) downloadable at /api/agent/client and its PowerShell installer at /api/agent/installer/windows-gui. Both endpoints are PUBLIC (no auth). Frontend /agent now has Tabs: 'tab-client' (default) and 'tab-headless'. The GUI installer one-liner is intentionally token-less (user pastes token into the GUI wizard on first run). The Tkinter GUI itself was NOT runtime-tested (no X display in this Linux container) — only its endpoint serving + static code review was done. To exercise the live GUI, run on a Windows VM with Python: `iwr -useb '<host>/api/agent/installer/windows-gui' | iex` then run the Desktop shortcut.",
+  "rca of the issue": "n/a — no regressions, no new bugs found. All requested features verified working end-to-end at the API + UI structural layer."
+}

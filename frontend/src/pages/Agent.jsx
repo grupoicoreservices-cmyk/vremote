@@ -4,7 +4,8 @@ import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Download, Terminal, MonitorSmartphone, Server } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Copy, Download, Terminal, MonitorSmartphone, Server, AppWindow } from "lucide-react";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -24,6 +25,8 @@ export default function Agent() {
 
   const downloadUrl = `${BACKEND_URL}/api/agent/script`;
   const installerUrl = `${BACKEND_URL}/api/agent/installer/windows`;
+  const clientUrl = `${BACKEND_URL}/api/agent/client`;
+  const guiInstallerUrl = `${BACKEND_URL}/api/agent/installer/windows-gui`;
   const runCmd = selectedToken
     ? `python rustadmin_agent.py --server ${BACKEND_URL} --token ${selectedToken}`
     : `python rustadmin_agent.py --server ${BACKEND_URL} --token <SEU_TOKEN>`;
@@ -36,6 +39,11 @@ export default function Agent() {
   // One-line installer (admin PowerShell):
   const oneLineToken = selectedToken || "<SEU_TOKEN>";
   const winInstallerCmd = `iwr -useb "${installerUrl}" -OutFile "$env:TEMP\\install_rustadmin.ps1"; & "$env:TEMP\\install_rustadmin.ps1" -Server "${BACKEND_URL}" -Token "${oneLineToken}"`;
+  const winGuiInstallerCmd = `iwr -useb "${guiInstallerUrl}" -OutFile "$env:TEMP\\install_rustadmin_gui.ps1"; & "$env:TEMP\\install_rustadmin_gui.ps1" -Server "${BACKEND_URL}"`;
+  const exeGuiCmd = `pip install pyinstaller
+pyinstaller --onefile --noconsole --name RustAdminClient rustadmin_client.py
+# Resultado: dist\\RustAdminClient.exe (sem console, com janela GUI)
+# Distribua este .exe único — não precisa instalar Python no PC do usuário final.`;
 
   const winCmd = `# 1) Baixe o script
 Invoke-WebRequest -Uri "${downloadUrl}" -OutFile "rustadmin_agent.py"
@@ -65,21 +73,118 @@ pyinstaller --onefile --noconsole --name rustadmin-agent rustadmin_agent.py
     <>
       <Topbar title="Agente" subtitle="// instalar em dispositivos remotos" />
       <div className="p-6 space-y-6 max-w-5xl" data-testid="agent-page">
-        <Card className="bg-neutral-900 border-neutral-800 rounded-sm p-6">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 border border-green-500/40 bg-green-500/10 flex items-center justify-center shrink-0">
-              <MonitorSmartphone className="w-5 h-5 text-green-500" />
-            </div>
-            <div>
-              <h2 className="text-xl font-medium">Como instalar o RustAdmin Agent</h2>
-              <p className="text-sm text-neutral-400 mt-1">
-                O agente é um script Python leve que registra a máquina no painel,
-                envia <span className="font-mono">heartbeats</span> a cada 15s e (opcional) screenshots a cada 30s.
-                Compatível com Windows, macOS e Linux.
+        <Tabs defaultValue="client">
+          <TabsList className="bg-neutral-900 border border-neutral-800 rounded-sm">
+            <TabsTrigger value="client" data-testid="tab-client">
+              <AppWindow className="w-3.5 h-3.5 mr-2" /> Cliente com Interface (recomendado)
+            </TabsTrigger>
+            <TabsTrigger value="headless" data-testid="tab-headless">
+              <Terminal className="w-3.5 h-3.5 mr-2" /> Agente Headless (servidores)
+            </TabsTrigger>
+          </TabsList>
+
+          {/* =============== TAB 1: GUI CLIENT =============== */}
+          <TabsContent value="client" className="mt-4 space-y-6">
+            <Card className="bg-neutral-900 border-neutral-800 rounded-sm p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 border border-green-500/40 bg-green-500/10 flex items-center justify-center shrink-0">
+                  <AppWindow className="w-5 h-5 text-green-500" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-medium">Cliente Windows com Interface</h2>
+                  <p className="text-sm text-neutral-400 mt-1">
+                    Aplicação desktop estilo <strong>RustDesk</strong>: o usuário final abre, vê o
+                    <span className="text-green-500"> ID de 9 dígitos</span> e compartilha com o suporte.
+                    Cola o token <strong>uma única vez</strong> no wizard inicial.
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Step 1 - one-line installer */}
+            <Card className="bg-neutral-900 border-neutral-800 rounded-sm p-6">
+              <div className="label-eyebrow mb-2">Passo 1 · Instalação automática (PowerShell)</div>
+              <p className="text-sm text-neutral-400 mb-3">
+                Abra o <strong>PowerShell como Administrador</strong> no computador do usuário e cole:
               </p>
-            </div>
-          </div>
-        </Card>
+              <div className="flex items-center justify-between mb-2">
+                <Badge variant="outline" className="rounded-sm border-green-500/40 text-green-500 text-[10px] font-mono">
+                  RECOMENDADO
+                </Badge>
+                <Button size="sm" variant="ghost" onClick={() => copy(winGuiInstallerCmd)} className="h-7 text-xs text-neutral-400 hover:text-green-500" data-testid="cmd-win-gui-installer">
+                  <Copy className="w-3 h-3 mr-1" /> Copiar
+                </Button>
+              </div>
+              <pre className="bg-neutral-950 border border-neutral-800 rounded-sm p-4 text-[12px] font-mono leading-relaxed text-green-400 overflow-x-auto whitespace-pre-wrap">
+                {winGuiInstallerCmd}
+              </pre>
+              <p className="text-xs text-neutral-500 mt-3">
+                Cria atalho <span className="font-mono text-neutral-300">"RustAdmin Client"</span> na Área de Trabalho + Menu Iniciar.
+                Na primeira execução, o usuário cola o token e clica em <span className="text-green-500">Conectar ao painel</span> — o ID aparece imediatamente.
+              </p>
+            </Card>
+
+            {/* Step 2 - the user flow */}
+            <Card className="bg-neutral-900 border-neutral-800 rounded-sm p-6">
+              <div className="label-eyebrow mb-2">Passo 2 · O que o usuário vê</div>
+              <ol className="text-sm text-neutral-300 space-y-2 list-decimal list-inside mt-2">
+                <li>Janela escura com <strong>"Seu ID: 621 507 365"</strong> em destaque + botão <strong>Copiar</strong>.</li>
+                <li>Status <span className="text-green-500">● Online</span>, servidor, último heartbeat.</li>
+                <li>Switch <strong>"Permitir conexões remotas"</strong> que o usuário pode pausar quando quiser.</li>
+                <li>Log de atividade recente (todo comando recebido aparece aqui — transparência).</li>
+              </ol>
+            </Card>
+
+            {/* Step 3 - download + exe build */}
+            <Card className="bg-neutral-900 border-neutral-800 rounded-sm p-6">
+              <div className="label-eyebrow mb-3">Passo 3 · Distribuir como .exe único (sem Python)</div>
+              <p className="text-sm text-neutral-400 mb-3">
+                Numa máquina Windows com Python, rode estes comandos para gerar
+                <span className="font-mono text-neutral-300"> RustAdminClient.exe</span> standalone.
+                Depois é só compartilhar o .exe — usuário final não precisa instalar Python.
+              </p>
+              <div className="flex items-center gap-3 flex-wrap mb-3">
+                <Button asChild className="bg-green-500 hover:bg-green-400 text-black rounded-sm" data-testid="download-client-btn">
+                  <a href={clientUrl} download>
+                    <Download className="w-4 h-4 mr-2" /> rustadmin_client.py
+                  </a>
+                </Button>
+                <code className="text-xs font-mono text-neutral-400 bg-neutral-950 border border-neutral-800 px-3 py-2 rounded-sm">
+                  {clientUrl}
+                </code>
+              </div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-neutral-50">Comandos PyInstaller (Windows)</span>
+                <Button size="sm" variant="ghost" onClick={() => copy(exeGuiCmd)} className="h-7 text-xs text-neutral-400 hover:text-green-500" data-testid="cmd-exe-gui">
+                  <Copy className="w-3 h-3 mr-1" /> Copiar
+                </Button>
+              </div>
+              <pre className="bg-neutral-950 border border-neutral-800 rounded-sm p-4 text-[12px] font-mono leading-relaxed text-neutral-300 overflow-x-auto whitespace-pre-wrap">
+                {exeGuiCmd}
+              </pre>
+              <p className="text-xs text-amber-500 font-mono mt-3">
+                ⚠ O .exe não é assinado — Windows SmartScreen pode pedir confirmação. Para uso em produção,
+                assine com um certificado de code-signing.
+              </p>
+            </Card>
+          </TabsContent>
+
+          {/* =============== TAB 2: HEADLESS AGENT =============== */}
+          <TabsContent value="headless" className="mt-4 space-y-6">
+            <Card className="bg-neutral-900 border-neutral-800 rounded-sm p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 border border-amber-500/40 bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <Terminal className="w-5 h-5 text-amber-500" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-medium">Agente headless (sem interface)</h2>
+                  <p className="text-sm text-neutral-400 mt-1">
+                    Roda como serviço/scheduled-task — ideal para <strong>servidores</strong> sem
+                    usuário logado. Instalação 1-click via PowerShell registra Scheduled Task.
+                  </p>
+                </div>
+              </div>
+            </Card>
 
         {/* Token selector */}
         <Card className="bg-neutral-900 border-neutral-800 rounded-sm p-6">
@@ -216,6 +321,8 @@ pyinstaller --onefile --noconsole --name rustadmin-agent rustadmin_agent.py
             </div>
           </div>
         </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </>
   );

@@ -555,3 +555,24 @@ class TestWindowsInstaller:
         first_line = r.text.splitlines()[0] if r.text else ""
         assert first_line.startswith("# RustAdmin Agent"), f"first line: {first_line!r}"
         assert "Windows Installer" in first_line
+
+
+# ---------- Iteration 4: GUI client (Tkinter) + GUI installer ----------
+class TestGuiClient:
+    def test_gui_client_download(self):
+        r = requests.get(f"{BASE_URL}/api/agent/client", timeout=20)
+        assert r.status_code == 200
+        ctype = r.headers.get("content-type", "")
+        assert "python" in ctype.lower(), f"unexpected content-type: {ctype}"
+        text = r.text
+        first_line = text.splitlines()[0] if text else ""
+        assert first_line.startswith("#!/usr/bin/env python3"), f"got: {first_line!r}"
+        assert "RustAdmin Client (GUI)" in text, "GUI marker not found in script body"
+
+    def test_gui_installer_download(self):
+        r = requests.get(f"{BASE_URL}/api/agent/installer/windows-gui", timeout=20)
+        assert r.status_code == 200
+        ctype = r.headers.get("content-type", "")
+        assert "text/plain" in ctype.lower(), f"got: {ctype}"
+        first_line = r.text.splitlines()[0] if r.text else ""
+        assert first_line.startswith("# RustAdmin Client (GUI)"), f"first line: {first_line!r}"

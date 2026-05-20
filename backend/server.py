@@ -815,6 +815,26 @@ async def agent_installer_windows():
     return FileResponse(str(path), media_type="text/plain", filename="install_windows.ps1")
 
 
+@api.get("/agent/client", response_class=None)
+async def agent_client_download():
+    """Serve the GUI client script (Tkinter)."""
+    from fastapi.responses import FileResponse
+    path = ROOT_DIR.parent / "agent" / "rustadmin_client.py"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    return FileResponse(str(path), media_type="text/x-python", filename="rustadmin_client.py")
+
+
+@api.get("/agent/installer/windows-gui", response_class=None)
+async def agent_installer_windows_gui():
+    """Serve the PowerShell installer for the GUI client."""
+    from fastapi.responses import FileResponse
+    path = ROOT_DIR.parent / "agent" / "install_windows_gui.ps1"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Instalador GUI não encontrado")
+    return FileResponse(str(path), media_type="text/plain", filename="install_windows_gui.ps1")
+
+
 # ---------- Startup: Seed ----------
 async def seed_admin():
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@rustadmin.io").lower()
