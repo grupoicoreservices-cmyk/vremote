@@ -12,6 +12,7 @@ import AddressBook from "@/pages/AddressBook";
 import AuditLogs from "@/pages/AuditLogs";
 import AccessTokens from "@/pages/AccessTokens";
 import Agent from "@/pages/Agent";
+import RemoteSession from "@/pages/RemoteSession";
 import Settings from "@/pages/Settings";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -22,6 +23,14 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route
+              path="/session/:sessionId"
+              element={
+                <ProtectedRoute>
+                  <RemoteSession />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/"
               element={

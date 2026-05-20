@@ -111,8 +111,8 @@ export default function Devices() {
   const handleConnect = async (device) => {
     try {
       const { data } = await api.post("/sessions", { device_id: device.id, note: "Conexão iniciada via painel" });
-      toast.success(`Sessão #${data.id.slice(0,6)} iniciada`);
-      setOpenConnect({ device, session: data });
+      toast.success(`Sessão #${data.id.slice(0,6)} aberta em nova aba`);
+      window.open(`/session/${data.id}`, "_blank", "noopener");
     } catch (e) {
       toast.error(formatApiErrorDetail(e?.response?.data?.detail));
     }

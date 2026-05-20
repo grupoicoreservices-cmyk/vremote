@@ -745,6 +745,18 @@ async def device_screenshot(device_id: str, user: dict = Depends(get_current_use
 
 
 # ---------- Remote Control Commands ----------
+@api.get("/sessions/{session_id}")
+async def get_session(session_id: str, user: dict = Depends(get_current_user)):
+    sess = await db.sessions.find_one({"id": session_id}, {"_id": 0})
+    if not sess:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada")
+    dev = await db.devices.find_one(
+        {"id": sess["device_id"]},
+        {"_id": 0, "agent_secret": 0, "last_screenshot": 0},
+    )
+    return {"session": sess, "device": dev}
+
+
 @api.post("/sessions/{session_id}/command")
 async def queue_command(session_id: str, body: CommandIn, user: dict = Depends(get_current_user)):
     sess = await db.sessions.find_one({"id": session_id}, {"_id": 0})
