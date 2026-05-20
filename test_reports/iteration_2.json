@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 2 — Added 4 new pytest cases for the agent endpoints and exercised them end-to-end. 19/19 backend tests pass (15 regression + 4 new). Frontend smoke verified: 'Agente' sidebar entry navigates to /agent, page renders with token picker (2 active tokens), download button + Windows/Linux copy blocks, command string updates when switching token, and the Devices Connect modal correctly falls back to the mock screenshot for devices without an agent upload.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts ResponsiveContainer width(-1)/height(-1) console warning persists from iteration 1. Not blocking, charts render once data arrives. Optional: add explicit minHeight to chart wrappers."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (carry-over from iter 1): silence recharts width(-1)/height(-1) warnings via minHeight on Dashboard chart containers."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py is now ~846 lines (>700). Strongly recommend splitting agent/devices/sessions/users into separate routers — server.py is becoming unmaintainable.",
+    "POST /api/agent/screenshot uses len(body.image_base64) > 4_000_000 as the 4MB guard but only AFTER FastAPI/Pydantic has already loaded the JSON body into memory. For a real ~4MB+ payload this still allocates the full string. Consider switching to a Request-level Content-Length check or a streaming endpoint to truly reject oversize before allocation.",
+    "Agent endpoints (/api/agent/register, /heartbeat, /screenshot) are completely unauthenticated besides the access-token / agent_secret pair. No per-token rate-limit and no IP allow-list. A leaked token allows unlimited device registrations. Consider: (a) max_uses on access_tokens, (b) per-IP rate-limit on /agent/register.",
+    "_auth_agent fetches the full device doc (incl. base64 screenshot) just to compare agent_secret. Use a projection {'_id':0,'agent_secret':1} to avoid loading the (potentially large) last_screenshot on every heartbeat.",
+    "Devices.jsx fires GET /api/devices/{id}/screenshot on every Connect click but does not handle the case where the endpoint returns 200 with image_base64: null — it works (falls back to mock) but consider also handling network/404 to avoid leaving the modal in a 'loading' state."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (added TestAgentEndpoints class with 4 tests)"
+  ],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "100% smoke (login, /agent nav + page, token picker switching, Connect modal mock fallback)"},
+  "test_credentials": "admin@rustadmin.io / Admin@2026 (verified)",
+  "seed_data_creation": "Tests create TEST_-prefixed access tokens (TEST_agent_tk, TEST_revoked_tk) and a TEST_AGT_host device via /agent/register; device is deleted at end of test. Two leftover TEST_*-prefixed access tokens remain visible in UI (TEST_agent_tk, plus older test-agent) but are harmless.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Agent flow now fully tested at backend layer: register (valid token → 200 with device_id+rust_id+agent_secret+name; invalid → 401; revoked → 401), heartbeat (correct secret → 200 ok:true; wrong → 401), screenshot (tiny PNG → 200 + retrievable via GET /api/devices/{id}/screenshot; >4MB → 413), and GET /api/agent/script (200, text/x-python, starts with shebang). list_devices projection confirmed to exclude agent_secret and last_screenshot. Frontend Agent page works with token picker; cmd string updates on token switch. Connect modal: live-screenshot-mock shown when no agent screenshot (seeded devices); live-screenshot-real path tested in unit test via GET endpoint returning the uploaded b64 — UI render of real path NOT visually exercised because seeded devices have no screenshot AND the agent-registered device gets deleted in the test teardown. If you want to validate the real-image branch in the UI, run the agent script end-to-end OR seed one device with last_screenshot=<b64> directly in Mongo.",
+  "rca of the issue": "n/a — no regressions, no new bugs."
+}

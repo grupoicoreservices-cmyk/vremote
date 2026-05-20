@@ -265,3 +265,129 @@ class TestServerConfig:
             "allow_registration": True,
         }, timeout=20)
         assert r.status_code == 200
+
+
+
+# ---------- Agent endpoints (Iteration 2) ----------
+# Tiny base64-encoded 1x1 PNG
+TINY_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
+)
+
+
+class TestAgentEndpoints:
+    @pytest.fixture(scope="class")
+    def access_token_value(self, admin_session):
+        r = admin_session.post(
+            f"{BASE_URL}/api/access-tokens",
+            json={"label": "TEST_agent_tk", "expires_in_days": 7},
+            timeout=20,
+        )
+        assert r.status_code == 200, r.text
+        tk = r.json()
+        return tk
+
+    def test_register_invalid_token(self):
+        r = requests.post(
+            f"{BASE_URL}/api/agent/register",
+            json={"token": "rdpro_invalid_xxx", "hostname": "TEST_bad", "os": "windows"},
+            timeout=20,
+        )
+        assert r.status_code == 401
+
+    def test_register_revoked_token(self, admin_session):
+        # create, then revoke, then try
+        r = admin_session.post(
+            f"{BASE_URL}/api/access-tokens",
+            json={"label": "TEST_revoked_tk", "expires_in_days": 7},
+            timeout=20,
+        )
+        tk = r.json()
+        admin_session.delete(f"{BASE_URL}/api/access-tokens/{tk['id']}", timeout=20)
+        r = requests.post(
+            f"{BASE_URL}/api/agent/register",
+            json={"token": tk["token"], "hostname": "TEST_revoked", "os": "linux"},
+            timeout=20,
+        )
+        assert r.status_code == 401
+
+    def test_register_success_and_full_flow(self, admin_session, access_token_value):
+        token_str = access_token_value["token"]
+        # register
+        r = requests.post(
+            f"{BASE_URL}/api/agent/register",
+            json={"token": token_str, "hostname": "TEST_AGT_host", "os": "windows", "ip": "1.2.3.4"},
+            timeout=20,
+        )
+        assert r.status_code == 200, r.text
+        reg = r.json()
+        for k in ["device_id", "rust_id", "agent_secret", "name"]:
+            assert k in reg
+        assert len(reg["rust_id"]) == 9 and reg["rust_id"].isdigit()
+        assert reg["name"] == "TEST_AGT_host"
+        assert len(reg["agent_secret"]) >= 32
+
+        device_id = reg["device_id"]
+        agent_secret = reg["agent_secret"]
+
+        # Heartbeat - wrong secret
+        r = requests.post(
+            f"{BASE_URL}/api/agent/heartbeat",
+            json={"device_id": device_id, "agent_secret": "WRONG"},
+            timeout=20,
+        )
+        assert r.status_code == 401
+
+        # Heartbeat - correct
+        r = requests.post(
+            f"{BASE_URL}/api/agent/heartbeat",
+            json={"device_id": device_id, "agent_secret": agent_secret},
+            timeout=20,
+        )
+        assert r.status_code == 200
+        assert r.json().get("ok") is True
+
+        # Screenshot - too large (>4MB) -> 413
+        big = "a" * 4_000_001
+        r = requests.post(
+            f"{BASE_URL}/api/agent/screenshot",
+            json={"device_id": device_id, "agent_secret": agent_secret, "image_base64": big},
+            timeout=30,
+        )
+        assert r.status_code == 413
+
+        # Screenshot - valid small
+        r = requests.post(
+            f"{BASE_URL}/api/agent/screenshot",
+            json={"device_id": device_id, "agent_secret": agent_secret, "image_base64": TINY_PNG_B64},
+            timeout=20,
+        )
+        assert r.status_code == 200
+
+        # GET /api/devices/{id}/screenshot (authed) should return the b64
+        r = admin_session.get(f"{BASE_URL}/api/devices/{device_id}/screenshot", timeout=20)
+        assert r.status_code == 200
+        body = r.json()
+        assert body["image_base64"] == TINY_PNG_B64
+        assert body["captured_at"] is not None
+
+        # /api/devices list excludes agent_secret and last_screenshot
+        items = admin_session.get(f"{BASE_URL}/api/devices?search=TEST_AGT_host", timeout=20).json()
+        match = [i for i in items if i["id"] == device_id]
+        assert match, "registered device should appear in list"
+        assert "agent_secret" not in match[0]
+        assert "last_screenshot" not in match[0]
+        # tags include 'Agente' marker
+        assert "Agente" in match[0].get("tags", [])
+
+        # cleanup
+        admin_session.delete(f"{BASE_URL}/api/devices/{device_id}", timeout=20)
+
+    def test_agent_script_download(self):
+        r = requests.get(f"{BASE_URL}/api/agent/script", timeout=20)
+        assert r.status_code == 200
+        ctype = r.headers.get("content-type", "")
+        assert "python" in ctype.lower(), f"unexpected content-type: {ctype}"
+        # First line must be shebang
+        first_line = r.text.splitlines()[0] if r.text else ""
+        assert first_line.startswith("#!/usr/bin/env python3"), f"got: {first_line!r}"

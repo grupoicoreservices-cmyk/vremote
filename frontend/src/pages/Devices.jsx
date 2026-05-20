@@ -111,7 +111,11 @@ export default function Devices() {
     try {
       const { data } = await api.post("/sessions", { device_id: device.id, note: "Conexão iniciada via painel" });
       toast.success(`Sessão #${data.id.slice(0,6)} iniciada`);
-      setOpenConnect({ device, session: data });
+      setOpenConnect({ device, session: data, screenshot: null });
+      // try to fetch the latest real screenshot from agent
+      api.get(`/devices/${device.id}/screenshot`).then((r) => {
+        setOpenConnect((prev) => prev ? { ...prev, screenshot: r.data } : null);
+      }).catch(() => {});
     } catch (e) {
       toast.error(formatApiErrorDetail(e?.response?.data?.detail));
     }
@@ -296,10 +300,25 @@ export default function Devices() {
             </DialogDescription>
           </DialogHeader>
           <div className="relative border border-neutral-800 rounded-sm overflow-hidden bg-black">
-            <img src={SCREEN_MOCK} alt="screen preview" className="w-full h-auto" />
+            {openConnect?.screenshot?.image_base64 ? (
+              <img
+                src={`data:image/jpeg;base64,${openConnect.screenshot.image_base64}`}
+                alt="agent screenshot"
+                className="w-full h-auto"
+                data-testid="live-screenshot-real"
+              />
+            ) : (
+              <img src={SCREEN_MOCK} alt="screen preview" className="w-full h-auto" data-testid="live-screenshot-mock" />
+            )}
             <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-black/70 border border-green-500/50 px-2 py-1 font-mono text-[10px] text-green-500">
-              <span className="pulse-dot bg-green-500 text-green-500 !w-1.5 !h-1.5" /> LIVE · 1920×1080
+              <span className="pulse-dot bg-green-500 text-green-500 !w-1.5 !h-1.5" />
+              {openConnect?.screenshot?.image_base64 ? "LIVE · agent" : "DEMO · sem agente"}
             </div>
+            {openConnect?.screenshot?.captured_at && (
+              <div className="absolute bottom-2 left-2 bg-black/70 border border-neutral-800 px-2 py-1 font-mono text-[10px] text-neutral-400">
+                capturado: {new Date(openConnect.screenshot.captured_at).toLocaleString("pt-BR")}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button

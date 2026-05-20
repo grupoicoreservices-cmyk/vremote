@@ -11,6 +11,7 @@ import Users from "@/pages/Users";
 import AddressBook from "@/pages/AddressBook";
 import AuditLogs from "@/pages/AuditLogs";
 import AccessTokens from "@/pages/AccessTokens";
+import Agent from "@/pages/Agent";
 import Settings from "@/pages/Settings";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -36,6 +37,7 @@ function App() {
               <Route path="audit-logs" element={<AuditLogs />} />
               <Route path="users" element={<ProtectedRoute requireAdmin><Users /></ProtectedRoute>} />
               <Route path="access-tokens" element={<ProtectedRoute requireAdmin><AccessTokens /></ProtectedRoute>} />
+              <Route path="agent" element={<Agent />} />
               <Route path="settings" element={<Settings />} />
             </Route>
           </Routes>

@@ -318,7 +318,7 @@ async def list_devices(
             {"rust_id": {"$regex": search}},
             {"ip": {"$regex": search}},
         ]
-    items = await db.devices.find(q, {"_id": 0}).sort("last_seen", -1).to_list(500)
+    items = await db.devices.find(q, {"_id": 0, "agent_secret": 0, "last_screenshot": 0}).sort("last_seen", -1).to_list(500)
     return items
 
 
@@ -594,6 +594,126 @@ async def update_config(body: ServerConfigIn, user: dict = Depends(require_admin
     cfg = await db.server_config.find_one({"id": "default"}, {"_id": 0})
     await log_event(user["email"], "server-config.update")
     return cfg
+
+
+# ---------- Agent (unauthenticated bootstrap, then signed by agent_secret) ----------
+class AgentRegisterIn(BaseModel):
+    token: str
+    hostname: str
+    os: Literal["windows", "linux", "macos", "android", "ios"] = "windows"
+    ip: Optional[str] = None
+    version: Optional[str] = "agent-py-1.0"
+
+
+class AgentAuthBase(BaseModel):
+    device_id: str
+    agent_secret: str
+
+
+class AgentHeartbeatIn(AgentAuthBase):
+    pass
+
+
+class AgentScreenshotIn(AgentAuthBase):
+    image_base64: str
+
+
+async def _auth_agent(device_id: str, agent_secret: str) -> dict:
+    device = await db.devices.find_one({"id": device_id}, {"_id": 0})
+    if not device or device.get("agent_secret") != agent_secret:
+        raise HTTPException(status_code=401, detail="Agente não autorizado")
+    return device
+
+
+@api.post("/agent/register")
+async def agent_register(body: AgentRegisterIn):
+    tok = await db.access_tokens.find_one({"token": body.token, "revoked": False}, {"_id": 0})
+    if not tok:
+        raise HTTPException(status_code=401, detail="Token inválido ou revogado")
+    if tok.get("expires_at"):
+        try:
+            if datetime.fromisoformat(tok["expires_at"]) < datetime.now(timezone.utc):
+                raise HTTPException(status_code=401, detail="Token expirado")
+        except ValueError:
+            pass
+
+    agent_secret = uuid.uuid4().hex + uuid.uuid4().hex
+    doc = {
+        "id": str(uuid.uuid4()),
+        "rust_id": gen_rustdesk_id(),
+        "name": body.hostname[:64],
+        "os": body.os,
+        "tags": ["Agente"],
+        "ip": body.ip or "0.0.0.0",
+        "notes": "Registrado via agent.py",
+        "status": "online",
+        "version": body.version or "agent-py-1.0",
+        "created_at": now_iso(),
+        "last_seen": now_iso(),
+        "registered_by": f"agent:{tok['label']}",
+        "agent_secret": agent_secret,
+        "last_screenshot": None,
+        "last_screenshot_at": None,
+    }
+    await db.devices.insert_one(doc)
+    await log_event(f"agent:{tok['label']}", "agent.register", target=doc["rust_id"])
+    return {
+        "device_id": doc["id"],
+        "rust_id": doc["rust_id"],
+        "agent_secret": agent_secret,
+        "name": doc["name"],
+    }
+
+
+@api.post("/agent/heartbeat")
+async def agent_heartbeat(body: AgentHeartbeatIn):
+    await _auth_agent(body.device_id, body.agent_secret)
+    await db.devices.update_one(
+        {"id": body.device_id},
+        {"$set": {"status": "online", "last_seen": now_iso()}},
+    )
+    return {"ok": True, "server_time": now_iso()}
+
+
+@api.post("/agent/screenshot")
+async def agent_screenshot(body: AgentScreenshotIn):
+    await _auth_agent(body.device_id, body.agent_secret)
+    if len(body.image_base64) > 4_000_000:
+        raise HTTPException(status_code=413, detail="Imagem muito grande")
+    await db.devices.update_one(
+        {"id": body.device_id},
+        {"$set": {
+            "last_screenshot": body.image_base64,
+            "last_screenshot_at": now_iso(),
+            "status": "online",
+            "last_seen": now_iso(),
+        }},
+    )
+    return {"ok": True}
+
+
+@api.get("/devices/{device_id}/screenshot")
+async def device_screenshot(device_id: str, user: dict = Depends(get_current_user)):
+    d = await db.devices.find_one(
+        {"id": device_id},
+        {"_id": 0, "last_screenshot": 1, "last_screenshot_at": 1},
+    )
+    if not d:
+        raise HTTPException(status_code=404, detail="Não encontrado")
+    return {
+        "image_base64": d.get("last_screenshot"),
+        "captured_at": d.get("last_screenshot_at"),
+    }
+
+
+@api.get("/agent/script", response_class=None)
+async def agent_script_download():
+    """Serve the latest agent.py for one-line download by users."""
+    from fastapi.responses import FileResponse
+    path = ROOT_DIR.parent / "agent" / "rustadmin_agent.py"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Script não encontrado")
+    return FileResponse(str(path), media_type="text/x-python", filename="rustadmin_agent.py")
 
 
 # ---------- Startup: Seed ----------

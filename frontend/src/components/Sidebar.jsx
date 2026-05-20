@@ -10,6 +10,7 @@ import {
   Settings,
   Terminal,
   LogOut,
+  Download,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -21,6 +22,7 @@ const NAV = [
   { to: "/audit-logs", label: "Audit Logs", icon: ScrollText, testid: "nav-audit-logs" },
   { to: "/users", label: "Usuários", icon: Users, adminOnly: true, testid: "nav-users" },
   { to: "/access-tokens", label: "Tokens", icon: KeyRound, adminOnly: true, testid: "nav-access-tokens" },
+  { to: "/agent", label: "Agente", icon: Download, testid: "nav-agent" },
   { to: "/settings", label: "Configurações", icon: Settings, testid: "nav-settings" },
 ];
 
