@@ -72,7 +72,7 @@ export default function RemoteSession() {
   const { session, device } = data;
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col" data-testid="remote-session-page">
+    <div className="h-screen bg-neutral-950 text-neutral-100 flex flex-col overflow-hidden" data-testid="remote-session-page">
       {/* Top bar */}
       <header className="h-12 border-b border-neutral-900 bg-neutral-950 px-4 flex items-center gap-4 shrink-0">
         <div className="flex items-center gap-2">
@@ -115,7 +115,7 @@ export default function RemoteSession() {
       </header>
 
       {/* Remote view */}
-      <main className="flex-1 p-3 overflow-auto">
+      <main className="flex-1 min-h-0 p-3 flex flex-col">
         <RemoteControl device={device} session={session} onEnd={endSession} />
       </main>
     </div>

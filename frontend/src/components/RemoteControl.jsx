@@ -165,7 +165,7 @@ export default function RemoteControl({ device, session, onEnd }) {
     : SCREEN_MOCK;
 
   return (
-    <div className="space-y-3" data-testid="remote-control">
+    <div className="flex flex-col h-full gap-3" data-testid="remote-control">
       {/* Status bar */}
       <div className="flex items-center justify-between text-xs font-mono">
         <div className="flex items-center gap-3">
@@ -204,7 +204,7 @@ export default function RemoteControl({ device, session, onEnd }) {
 
       {/* Screen */}
       <div
-        className="relative border border-neutral-800 rounded-sm overflow-hidden bg-black cursor-default"
+        className="relative border border-neutral-800 rounded-sm overflow-hidden bg-black cursor-default flex-1 min-h-0 flex items-center justify-center"
         onWheel={onWheel}
       >
         <img
@@ -215,7 +215,7 @@ export default function RemoteControl({ device, session, onEnd }) {
           onClick={onClick}
           onDoubleClick={onDoubleClick}
           onContextMenu={onContextMenu}
-          className="w-full h-auto select-none"
+          className="max-w-full max-h-full w-auto h-auto object-contain select-none"
           data-testid={hasAgent ? "live-screenshot-real" : "live-screenshot-mock"}
         />
       </div>
