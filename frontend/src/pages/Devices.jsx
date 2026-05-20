@@ -286,7 +286,7 @@ export default function Devices() {
       </div>
 
       <Dialog open={!!openConnect} onOpenChange={(o) => !o && setOpenConnect(null)}>
-        <DialogContent className="bg-neutral-950 border-neutral-800 rounded-sm max-w-5xl">
+        <DialogContent className="bg-neutral-950 border-neutral-800 rounded-sm max-w-5xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               <span className="pulse-dot bg-green-500 text-green-500" />

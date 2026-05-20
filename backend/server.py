@@ -918,6 +918,7 @@ async def on_startup():
     await db.sessions.create_index("started_at")
     await db.audit_logs.create_index("timestamp")
     await db.login_attempts.create_index("identifier")
+    await db.agent_commands.create_index([("device_id", 1), ("status", 1), ("created_at", 1)])
     await seed_admin()
     await seed_demo_data()
     log.info("RustAdmin API ready")
