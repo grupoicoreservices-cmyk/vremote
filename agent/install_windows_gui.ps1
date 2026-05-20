@@ -1,4 +1,4 @@
-# RustAdmin Client (GUI) — Instalador Windows
+# V-remote Client (GUI) — Instalador Windows
 #
 # Instala o cliente com interface gráfica (estilo RustDesk) que mostra o ID
 # para o usuário compartilhar com o suporte.
@@ -15,7 +15,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== RustAdmin Client (GUI) Installer ===" -ForegroundColor Green
+Write-Host "=== V-remote Client (GUI) Installer ===" -ForegroundColor Green
 Write-Host "Servidor: $Server"
 Write-Host ""
 
@@ -26,9 +26,9 @@ if (-not $python) {
 }
 Write-Host "[OK] Python: $($python.Source)" -ForegroundColor Green
 
-$installDir = "$env:LOCALAPPDATA\RustAdmin"
+$installDir = "$env:LOCALAPPDATA\V-remote"
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-$scriptPath = Join-Path $installDir "rustadmin_client.py"
+$scriptPath = Join-Path $installDir "vremote_client.py"
 
 Write-Host "Baixando cliente..."
 Invoke-WebRequest -Uri "$Server/api/agent/client" -OutFile $scriptPath -UseBasicParsing
@@ -46,19 +46,19 @@ $arguments = "`"$scriptPath`" --server `"$Server`""
 
 # Atalho Área de Trabalho
 $ws = New-Object -ComObject WScript.Shell
-$desktopLnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "RustAdmin Client.lnk"
+$desktopLnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "V-remote Client.lnk"
 $shortcut = $ws.CreateShortcut($desktopLnk)
 $shortcut.TargetPath = $exe
 $shortcut.Arguments = $arguments
 $shortcut.WorkingDirectory = $installDir
 $shortcut.IconLocation = $exe
-$shortcut.Description = "RustAdmin Remote Access Client"
+$shortcut.Description = "V-remote Remote Access Client"
 $shortcut.Save()
 Write-Host "[OK] Atalho na Area de Trabalho: $desktopLnk" -ForegroundColor Green
 
 # Atalho Menu Iniciar
 $startDir = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
-$startLnk = Join-Path $startDir "RustAdmin Client.lnk"
+$startLnk = Join-Path $startDir "V-remote Client.lnk"
 $startShortcut = $ws.CreateShortcut($startLnk)
 $startShortcut.TargetPath = $exe
 $startShortcut.Arguments = $arguments
@@ -69,7 +69,7 @@ Write-Host "[OK] Atalho no Menu Iniciar" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "=== INSTALADO ===" -ForegroundColor Green
-Write-Host "Abra 'RustAdmin Client' na Area de Trabalho." -ForegroundColor Cyan
+Write-Host "Abra 'V-remote Client' na Area de Trabalho." -ForegroundColor Cyan
 Write-Host "Cole o token na primeira execucao e seu ID aparecera na tela." -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Para desinstalar:" -ForegroundColor Yellow

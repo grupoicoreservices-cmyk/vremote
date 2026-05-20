@@ -58,7 +58,7 @@ export default function AuditLogs() {
 
         <Card className="bg-neutral-900 border-neutral-800 rounded-sm">
           <div className="px-5 py-3 border-b border-neutral-800 flex items-center justify-between">
-            <div className="label-eyebrow text-green-500">$ tail -f /var/log/rustadmin/audit.log</div>
+            <div className="label-eyebrow text-green-500">$ tail -f /var/log/vremote/audit.log</div>
           </div>
           <div className="px-5 py-4 font-mono text-[12px] leading-relaxed space-y-1">
             {logs.map((l) => (

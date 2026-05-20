@@ -43,7 +43,7 @@ export default function Sidebar() {
             <Terminal className="w-4 h-4 text-green-500" />
           </div>
           <div>
-            <div className="text-sm font-semibold tracking-tight">RustAdmin</div>
+            <div className="text-sm font-semibold tracking-tight">V-remote</div>
             <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">Remote Control v1.0</div>
           </div>
         </div>

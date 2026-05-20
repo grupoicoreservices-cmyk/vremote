@@ -12,7 +12,7 @@ const BG = "https://static.prod-images.emergentagent.com/jobs/539a4407-7ab7-4ef7
 export default function Login() {
   const { user, login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@rustadmin.io");
+  const [email, setEmail] = useState("admin@vremote.io");
   const [password, setPassword] = useState("Admin@2026");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -46,7 +46,7 @@ export default function Login() {
               <Terminal className="w-5 h-5 text-green-500" />
             </div>
             <div>
-              <div className="text-sm font-semibold tracking-tight">RustAdmin</div>
+              <div className="text-sm font-semibold tracking-tight">V-remote</div>
               <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">Remote Control Panel</div>
             </div>
           </div>
@@ -119,7 +119,7 @@ export default function Login() {
               {loading ? "AUTENTICANDO…" : (<><span>Autenticar</span><ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-0.5" /></>)}
             </Button>
             <div className="text-[10px] font-mono text-neutral-500 text-center pt-2">
-              Demo · admin@rustadmin.io · Admin@2026
+              Demo · admin@vremote.io · Admin@2026
             </div>
           </form>
         </div>

@@ -1,4 +1,4 @@
-# PRD — RustAdmin (Painel de Acesso Remoto estilo RustDesk)
+# PRD — V-remote (Painel de Acesso Remoto estilo RustDesk)
 
 ## Problem Statement (original, PT-BR)
 > "eu gostira de criar um sistema de acesso remoto baseado nesse dwservice.net" — refinado posteriormente para um **sistema baseado no RustDesk com painel de gerenciamento**.

@@ -32,11 +32,11 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
-app = FastAPI(title="RustAdmin API")
+app = FastAPI(title="V-remote API")
 api = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-log = logging.getLogger("rustadmin")
+log = logging.getLogger("vremote")
 
 # ---------- Helpers ----------
 def now_iso() -> str:
@@ -574,9 +574,9 @@ async def get_config(user: dict = Depends(get_current_user)):
     if not cfg:
         cfg = {
             "id": "default",
-            "relay_server": "relay.rustadmin.io:21117",
-            "rendezvous_server": "rs.rustadmin.io:21116",
-            "api_url": "https://api.rustadmin.io",
+            "relay_server": "relay.vremote.io:21117",
+            "rendezvous_server": "rs.vremote.io:21116",
+            "api_url": "https://api.vremote.io",
             "key": "AUTO-GENERATED-KEY-PLACEHOLDER",
             "allow_registration": True,
             "updated_at": now_iso(),
@@ -799,10 +799,10 @@ async def agent_ack_command(body: CommandAckIn):
 async def agent_script_download():
     """Serve the latest agent.py for one-line download by users."""
     from fastapi.responses import FileResponse
-    path = ROOT_DIR.parent / "agent" / "rustadmin_agent.py"
+    path = ROOT_DIR.parent / "agent" / "vremote_agent.py"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Script não encontrado")
-    return FileResponse(str(path), media_type="text/x-python", filename="rustadmin_agent.py")
+    return FileResponse(str(path), media_type="text/x-python", filename="vremote_agent.py")
 
 
 @api.get("/agent/installer/windows", response_class=None)
@@ -819,10 +819,10 @@ async def agent_installer_windows():
 async def agent_client_download():
     """Serve the GUI client script (Tkinter)."""
     from fastapi.responses import FileResponse
-    path = ROOT_DIR.parent / "agent" / "rustadmin_client.py"
+    path = ROOT_DIR.parent / "agent" / "vremote_client.py"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
-    return FileResponse(str(path), media_type="text/x-python", filename="rustadmin_client.py")
+    return FileResponse(str(path), media_type="text/x-python", filename="vremote_client.py")
 
 
 @api.get("/agent/installer/windows-gui", response_class=None)
@@ -837,8 +837,22 @@ async def agent_installer_windows_gui():
 
 # ---------- Startup: Seed ----------
 async def seed_admin():
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@rustadmin.io").lower()
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@vremote.io").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@2026")
+
+    # Migration: rename old rustadmin admin to current ADMIN_EMAIL if mismatched
+    old_admin = await db.users.find_one({"email": "admin@rustadmin.io"})
+    if old_admin and admin_email != "admin@rustadmin.io":
+        new_exists = await db.users.find_one({"email": admin_email})
+        if new_exists:
+            await db.users.delete_one({"email": "admin@rustadmin.io"})
+        else:
+            await db.users.update_one(
+                {"email": "admin@rustadmin.io"},
+                {"$set": {"email": admin_email, "password_hash": hash_pw(admin_password)}},
+            )
+            log.info(f"Admin migrated: admin@rustadmin.io → {admin_email}")
+
     existing = await db.users.find_one({"email": admin_email})
     if existing is None:
         await db.users.insert_one({
@@ -880,7 +894,7 @@ async def seed_demo_data():
             "version": "1.2.6",
             "created_at": now_iso(),
             "last_seen": (datetime.now(timezone.utc) - timedelta(minutes=random.randint(0, 240))).isoformat(),
-            "registered_by": "admin@rustadmin.io",
+            "registered_by": "admin@vremote.io",
         })
 
     # demo sessions (1 active, 4 ended)
@@ -892,7 +906,7 @@ async def seed_demo_data():
             "device_id": active["id"],
             "device_rust_id": active["rust_id"],
             "device_name": active["name"],
-            "operator_email": "admin@rustadmin.io",
+            "operator_email": "admin@vremote.io",
             "started_at": (datetime.now(timezone.utc) - timedelta(minutes=12)).isoformat(),
             "ended_at": None,
             "duration_sec": 720,
@@ -909,7 +923,7 @@ async def seed_demo_data():
                 "device_id": d["id"],
                 "device_rust_id": d["rust_id"],
                 "device_name": d["name"],
-                "operator_email": "admin@rustadmin.io",
+                "operator_email": "admin@vremote.io",
                 "started_at": started.isoformat(),
                 "ended_at": (started + timedelta(seconds=dur)).isoformat(),
                 "duration_sec": dur,
@@ -924,7 +938,7 @@ async def seed_demo_data():
         await db.audit_logs.insert_one({
             "id": str(uuid.uuid4()),
             "timestamp": (datetime.now(timezone.utc) - timedelta(hours=i)).isoformat(),
-            "actor": "admin@rustadmin.io",
+            "actor": "admin@vremote.io",
             "action": random.choice(sample_actions),
             "target": gen_rustdesk_id(),
             "meta": {},
@@ -941,7 +955,7 @@ async def on_startup():
     await db.agent_commands.create_index([("device_id", 1), ("status", 1), ("created_at", 1)])
     await seed_admin()
     await seed_demo_data()
-    log.info("RustAdmin API ready")
+    log.info("V-remote API ready")
 
 
 @app.on_event("shutdown")
@@ -951,7 +965,7 @@ async def on_shutdown():
 
 @api.get("/")
 async def root():
-    return {"service": "RustAdmin API", "ok": True}
+    return {"service": "V-remote API", "ok": True}
 
 
 app.include_router(api)

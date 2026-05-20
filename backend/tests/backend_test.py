@@ -1,4 +1,4 @@
-"""End-to-end backend tests for RustAdmin API.
+"""End-to-end backend tests for V-remote API.
 
 Covers: auth, dashboard, devices CRUD/heartbeat/search/filter, sessions, users (admin-only),
 audit logs filtering, access tokens, address book, server config, and ObjectId leakage.
@@ -9,7 +9,7 @@ import requests
 import pytest
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://remote-access-hub-18.preview.emergentagent.com").rstrip("/")
-ADMIN_EMAIL = "admin@rustadmin.io"
+ADMIN_EMAIL = "admin@vremote.io"
 ADMIN_PASSWORD = "Admin@2026"
 
 
@@ -391,6 +391,22 @@ class TestAgentEndpoints:
         # First line must be shebang
         first_line = r.text.splitlines()[0] if r.text else ""
         assert first_line.startswith("#!/usr/bin/env python3"), f"got: {first_line!r}"
+        # V-remote rebrand marker
+        assert "V-remote Agent (Python)" in r.text, "V-remote Agent (Python) marker not found"
+        # Filename header should reference vremote_agent.py
+        cd = r.headers.get("content-disposition", "")
+        assert "vremote_agent.py" in cd, f"content-disposition: {cd!r}"
+
+    def test_agent_client_download_filename(self):
+        r = requests.get(f"{BASE_URL}/api/agent/client", timeout=20)
+        assert r.status_code == 200
+        cd = r.headers.get("content-disposition", "")
+        assert "vremote_client.py" in cd, f"content-disposition: {cd!r}"
+
+    def test_old_admin_email_rejected(self):
+        r = requests.post(f"{BASE_URL}/api/auth/login",
+                          json={"email": "admin@rustadmin.io", "password": ADMIN_PASSWORD}, timeout=20)
+        assert r.status_code == 401, f"old admin email should be rejected, got {r.status_code}"
 
 
 # ---------- Iteration 3: Remote-control command flow + Windows installer ----------
@@ -553,7 +569,7 @@ class TestWindowsInstaller:
         ctype = r.headers.get("content-type", "")
         assert "text/plain" in ctype.lower(), f"got: {ctype}"
         first_line = r.text.splitlines()[0] if r.text else ""
-        assert first_line.startswith("# RustAdmin Agent"), f"first line: {first_line!r}"
+        assert first_line.startswith("# V-remote Agent"), f"first line: {first_line!r}"
         assert "Windows Installer" in first_line
 
 
@@ -567,7 +583,7 @@ class TestGuiClient:
         text = r.text
         first_line = text.splitlines()[0] if text else ""
         assert first_line.startswith("#!/usr/bin/env python3"), f"got: {first_line!r}"
-        assert "RustAdmin Client (GUI)" in text, "GUI marker not found in script body"
+        assert "V-remote Client (GUI)" in text, "GUI marker not found in script body"
 
     def test_gui_installer_download(self):
         r = requests.get(f"{BASE_URL}/api/agent/installer/windows-gui", timeout=20)
@@ -575,4 +591,4 @@ class TestGuiClient:
         ctype = r.headers.get("content-type", "")
         assert "text/plain" in ctype.lower(), f"got: {ctype}"
         first_line = r.text.splitlines()[0] if r.text else ""
-        assert first_line.startswith("# RustAdmin Client (GUI)"), f"first line: {first_line!r}"
+        assert first_line.startswith("# V-remote Client (GUI)"), f"first line: {first_line!r}"

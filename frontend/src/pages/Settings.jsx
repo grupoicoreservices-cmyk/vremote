@@ -45,7 +45,7 @@ export default function Settings() {
         <Card className="bg-neutral-900 border-neutral-800 rounded-sm max-w-3xl">
           <div className="px-6 py-5 border-b border-neutral-800">
             <div className="label-eyebrow">Servidor</div>
-            <h3 className="text-lg mt-1">Endpoints do RustAdmin</h3>
+            <h3 className="text-lg mt-1">Endpoints do V-remote</h3>
             <p className="text-xs text-neutral-500 mt-1">Configure os endereços de relay/rendezvous que os agentes utilizam.</p>
           </div>
           <form onSubmit={handleSave} className="p-6 space-y-5">

@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 5 (V-remote rebrand) — Backend pytest suite 28/28 PASS (26 regression + 2 newly added rebrand checks). New tests: (a) GET /api/agent/script returns 'V-remote Agent (Python)' marker AND content-disposition filename=vremote_agent.py; (b) GET /api/agent/client content-disposition filename=vremote_client.py; (c) login with old admin@rustadmin.io is correctly rejected (401). All previous endpoints (auth cookies+JWT, dashboard, devices CRUD/heartbeat, sessions lifecycle, users RBAC, audit logs, access tokens, address book, server config, agent register/heartbeat/screenshot, remote-control command poll+ack, Windows installer, GUI client + GUI installer) still pass. Frontend smoke (1920x1080 on the public preview URL): Login page shows V-remote logo, hero brand 'V-remote', default email field auto-filled with 'admin@vremote.io', login with Admin@2026 succeeds. Sidebar logo reads 'V-remote' / 'REMOTE CONTROL PANEL V1.0'. Dashboard top-right session badge shows 'admin@vremote.io'. No 'RustAdmin' / 'rustadmin' string appears anywhere on Login, Dashboard, Sidebar or Agent page. /agent page default Cliente tab shows download button 'vremote_client.py' pointing at /api/agent/client; Headless tab shows 'vremote_agent.py' download + 'vremote-agent' PyInstaller name + /api/agent/installer/windows one-liner. Migration: old admin@rustadmin.io login returns 401, admin@vremote.io works — seed migration verified.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Agent.jsx (line 44, exeGuiCmd)", "issue": "PyInstaller --name flag uses 'V-remoteClient' (with a hyphen) instead of 'VRemoteClient' specified in the review request. The hyphen makes it inconsistent with the agent file's class name 'VRemoteClient' (which was explicitly fixed in this iteration per the agent-to-agent note). PyInstaller will still build (it accepts arbitrary filename chars), but the output exe would be 'V-remoteClient.exe' — not what the spec asked for.", "selector": "[data-testid=\"cmd-exe-gui\"]", "priority": "LOW"},
+      {"component": "Agent.jsx (line 79, default tab label)", "issue": "Default Cliente tab label is 'Cliente com Interface (recomendado)' — the review request expected 'Cliente V-remote com Interface'. Not a functional bug; just a missed brand insertion if E1 truly wanted the brand in the tab title.", "selector": "[data-testid=\"tab-client\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard (carry-over from iter 1-4)", "issues": ["Recharts width(-1)/height(-1) console warnings still present — add a minHeight on the ResponsiveContainer."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "LOW: In /app/frontend/src/pages/Agent.jsx line 44, change '--name V-remoteClient' to '--name VRemoteClient' (remove the hyphen) to match the agent class name VRemoteClient and the iteration-5 review spec.",
+    "OPTIONAL: Consider updating the default Cliente tab label to include 'V-remote' if that was intended ('Cliente V-remote com Interface').",
+    "Carry-over (iter 3+4): server.py size (~945 lines) — split into routers; /api/agent/* installer/script/client endpoints are public (rate-limit recommended); POST /api/sessions/{id}/command does not enforce session-operator ownership; poll marks commands 'delivered' before agent ack (no visibility timeout); silence Recharts width/height(-1) warnings."
+  ],
+  "critical_code_review_comments": [
+    "Rebrand is otherwise consistent: backend logger='vremote', FastAPI title='V-remote API', ADMIN_EMAIL=admin@vremote.io, FileResponse filename headers vremote_agent.py / vremote_client.py, installer scripts say '# V-remote Agent — Windows Installer' / '# V-remote Client (GUI)'. The seed_admin one-time migration from admin@rustadmin.io → admin@vremote.io works (old login 401, new login 200).",
+    "Tkinter GUI vremote_client.py still cannot be smoke-tested headlessly in this container (no X display) — only its HTTP endpoint serving and static contents were validated. Run a Windows manual QA before shipping.",
+    "vremote_client.py stores agent_secret in plaintext at ~/.vremote_client.json — same pattern as the headless agent; acceptable for v1 but document it.",
+    "Only one residual 'V-remoteClient' typo left in frontend (Agent.jsx line 44 PyInstaller --name)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (added test_agent_client_download_filename + test_old_admin_email_rejected; strengthened test_agent_script_download to also assert 'V-remote Agent (Python)' body marker AND content-disposition filename=vremote_agent.py)"
+  ],
+  "success_rate": {"backend": "100% (28/28)", "frontend": "~95% smoke (login OK, sidebar OK, dashboard OK, /agent OK both tabs, no legacy 'RustAdmin' text anywhere) — minor: PyInstaller --name still 'V-remoteClient' on the Cliente tab"},
+  "test_credentials": "admin@vremote.io / Admin@2026 (verified working). Old admin@rustadmin.io correctly rejected with 401 (seed migration confirmed).",
+  "seed_data_creation": "Only ephemeral TEST_-prefixed access tokens/devices/sessions created by individual tests; all cleaned up in fixture teardowns. No new persistent seed data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter 5 was a pure rebrand RustAdmin → V-remote. Backend test suite is now 28/28 and uses admin@vremote.io. The seed_admin one-time migration in /app/backend/server.py renames the legacy admin@rustadmin.io row to admin@vremote.io at startup (if both exist, the legacy is deleted). One residual cosmetic bug: /app/frontend/src/pages/Agent.jsx line 44 still has '--name V-remoteClient' (should be '--name VRemoteClient' — extra hyphen). Server-config DB row in an already-seeded environment may still have the old 'rustadmin.io' relay/rendezvous strings — that is expected per the review request (only new installs get the V-remote defaults).",
+  "rca of the issue": "n/a — no functional regressions. Single cosmetic typo 'V-remoteClient' in Agent.jsx PyInstaller command is the only finding."
+}

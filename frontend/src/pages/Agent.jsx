@@ -28,8 +28,8 @@ export default function Agent() {
   const clientUrl = `${BACKEND_URL}/api/agent/client`;
   const guiInstallerUrl = `${BACKEND_URL}/api/agent/installer/windows-gui`;
   const runCmd = selectedToken
-    ? `python rustadmin_agent.py --server ${BACKEND_URL} --token ${selectedToken}`
-    : `python rustadmin_agent.py --server ${BACKEND_URL} --token <SEU_TOKEN>`;
+    ? `python vremote_agent.py --server ${BACKEND_URL} --token ${selectedToken}`
+    : `python vremote_agent.py --server ${BACKEND_URL} --token <SEU_TOKEN>`;
 
   const copy = (v) => {
     navigator.clipboard.writeText(v);
@@ -38,15 +38,15 @@ export default function Agent() {
 
   // One-line installer (admin PowerShell):
   const oneLineToken = selectedToken || "<SEU_TOKEN>";
-  const winInstallerCmd = `iwr -useb "${installerUrl}" -OutFile "$env:TEMP\\install_rustadmin.ps1"; & "$env:TEMP\\install_rustadmin.ps1" -Server "${BACKEND_URL}" -Token "${oneLineToken}"`;
-  const winGuiInstallerCmd = `iwr -useb "${guiInstallerUrl}" -OutFile "$env:TEMP\\install_rustadmin_gui.ps1"; & "$env:TEMP\\install_rustadmin_gui.ps1" -Server "${BACKEND_URL}"`;
+  const winInstallerCmd = `iwr -useb "${installerUrl}" -OutFile "$env:TEMP\\install_vremote.ps1"; & "$env:TEMP\\install_vremote.ps1" -Server "${BACKEND_URL}" -Token "${oneLineToken}"`;
+  const winGuiInstallerCmd = `iwr -useb "${guiInstallerUrl}" -OutFile "$env:TEMP\\install_vremote_gui.ps1"; & "$env:TEMP\\install_vremote_gui.ps1" -Server "${BACKEND_URL}"`;
   const exeGuiCmd = `pip install pyinstaller
-pyinstaller --onefile --noconsole --name RustAdminClient rustadmin_client.py
-# Resultado: dist\\RustAdminClient.exe (sem console, com janela GUI)
+pyinstaller --onefile --noconsole --name V-remoteClient vremote_client.py
+# Resultado: dist\\V-remoteClient.exe (sem console, com janela GUI)
 # Distribua este .exe único — não precisa instalar Python no PC do usuário final.`;
 
   const winCmd = `# 1) Baixe o script
-Invoke-WebRequest -Uri "${downloadUrl}" -OutFile "rustadmin_agent.py"
+Invoke-WebRequest -Uri "${downloadUrl}" -OutFile "vremote_agent.py"
 
 # 2) Instale dependências (controle remoto requer pyautogui)
 pip install requests mss pillow pyautogui
@@ -64,10 +64,10 @@ pip3 install requests mss pillow pyautogui
 ${runCmd}`;
 
   const exeCmd = `pip install pyinstaller
-pyinstaller --onefile --noconsole --name rustadmin-agent rustadmin_agent.py
-# Resultado em: dist\\rustadmin-agent.exe
+pyinstaller --onefile --noconsole --name vremote-agent vremote_agent.py
+# Resultado em: dist\\vremote-agent.exe
 # Você pode então distribuir o .exe único e rodar:
-.\\dist\\rustadmin-agent.exe --server ${BACKEND_URL} --token ${oneLineToken}`;
+.\\dist\\vremote-agent.exe --server ${BACKEND_URL} --token ${oneLineToken}`;
 
   return (
     <>
@@ -119,7 +119,7 @@ pyinstaller --onefile --noconsole --name rustadmin-agent rustadmin_agent.py
                 {winGuiInstallerCmd}
               </pre>
               <p className="text-xs text-neutral-500 mt-3">
-                Cria atalho <span className="font-mono text-neutral-300">"RustAdmin Client"</span> na Área de Trabalho + Menu Iniciar.
+                Cria atalho <span className="font-mono text-neutral-300">"V-remote Client"</span> na Área de Trabalho + Menu Iniciar.
                 Na primeira execução, o usuário cola o token e clica em <span className="text-green-500">Conectar ao painel</span> — o ID aparece imediatamente.
               </p>
             </Card>
@@ -140,13 +140,13 @@ pyinstaller --onefile --noconsole --name rustadmin-agent rustadmin_agent.py
               <div className="label-eyebrow mb-3">Passo 3 · Distribuir como .exe único (sem Python)</div>
               <p className="text-sm text-neutral-400 mb-3">
                 Numa máquina Windows com Python, rode estes comandos para gerar
-                <span className="font-mono text-neutral-300"> RustAdminClient.exe</span> standalone.
+                <span className="font-mono text-neutral-300"> V-remoteClient.exe</span> standalone.
                 Depois é só compartilhar o .exe — usuário final não precisa instalar Python.
               </p>
               <div className="flex items-center gap-3 flex-wrap mb-3">
                 <Button asChild className="bg-green-500 hover:bg-green-400 text-black rounded-sm" data-testid="download-client-btn">
                   <a href={clientUrl} download>
-                    <Download className="w-4 h-4 mr-2" /> rustadmin_client.py
+                    <Download className="w-4 h-4 mr-2" /> vremote_client.py
                   </a>
                 </Button>
                 <code className="text-xs font-mono text-neutral-400 bg-neutral-950 border border-neutral-800 px-3 py-2 rounded-sm">
@@ -228,7 +228,7 @@ pyinstaller --onefile --noconsole --name rustadmin-agent rustadmin_agent.py
               data-testid="download-agent-btn"
             >
               <a href={downloadUrl} download>
-                <Download className="w-4 h-4 mr-2" /> rustadmin_agent.py
+                <Download className="w-4 h-4 mr-2" /> vremote_agent.py
               </a>
             </Button>
             <code className="text-xs font-mono text-neutral-400 bg-neutral-950 border border-neutral-800 px-3 py-2 rounded-sm">
@@ -290,7 +290,7 @@ pyinstaller --onefile --noconsole --name rustadmin-agent rustadmin_agent.py
                 </Button>
               </div>
               <p className="text-xs text-neutral-500 mb-2">
-                Rode estes comandos numa máquina Windows com Python instalado. Gera <span className="font-mono text-neutral-300">rustadmin-agent.exe</span> standalone (sem console, sem dependências externas) que você pode distribuir.
+                Rode estes comandos numa máquina Windows com Python instalado. Gera <span className="font-mono text-neutral-300">vremote-agent.exe</span> standalone (sem console, sem dependências externas) que você pode distribuir.
               </p>
               <pre className="bg-neutral-950 border border-neutral-800 rounded-sm p-4 text-[12px] font-mono leading-relaxed text-neutral-300 overflow-x-auto whitespace-pre-wrap">
                 {exeCmd}
@@ -309,7 +309,7 @@ pyinstaller --onefile --noconsole --name rustadmin-agent rustadmin_agent.py
               <p><strong className="text-neutral-50">O que acontece quando você executa:</strong></p>
               <ol className="list-decimal list-inside space-y-1 text-neutral-400">
                 <li>O agente envia <span className="font-mono text-green-500">POST /api/agent/register</span> com o token.</li>
-                <li>O painel devolve um <span className="font-mono">device_id</span> + <span className="font-mono">agent_secret</span> e salva em <span className="font-mono">~/.rustadmin_agent.json</span>.</li>
+                <li>O painel devolve um <span className="font-mono">device_id</span> + <span className="font-mono">agent_secret</span> e salva em <span className="font-mono">~/.vremote_agent.json</span>.</li>
                 <li>A máquina aparece em <a href="/devices" className="text-green-500 underline">Dispositivos</a> com status <span className="text-green-500 font-mono">online</span>.</li>
                 <li>Clique em <strong>Conectar</strong>. O agente começa a enviar screenshots a cada 3s e recebe comandos (mouse/teclado) que o painel envia.</li>
                 <li>Click esquerdo, click direito, duplo clique, scroll, digitar texto, <span className="font-mono">Ctrl+Alt+Del</span>, <span className="font-mono">Win</span>, <span className="font-mono">Esc</span> — tudo funciona se o agente tiver <span className="font-mono text-green-500">pyautogui</span> instalado.</li>

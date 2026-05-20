@@ -1,18 +1,18 @@
-# RustAdmin Agent — Windows Installer
+# V-remote Agent — Windows Installer
 #
 # Uso:
 #   .\install_windows.ps1 -Server "https://meu-painel.exemplo.com" -Token "rdpro_xxx"
 #
 # O que faz:
 #   1. Garante Python instalado (avisa caso não esteja)
-#   2. Baixa rustadmin_agent.py do servidor para %LOCALAPPDATA%\RustAdmin
+#   2. Baixa vremote_agent.py do servidor para %LOCALAPPDATA%\V-remote
 #   3. Instala dependências Python (requests, mss, pillow, pyautogui)
 #   4. Registra uma Tarefa Agendada que executa o agente ao logar (oculto)
 #   5. Inicia a tarefa imediatamente
 #
 # Para desinstalar:
-#   Unregister-ScheduledTask -TaskName "RustAdminAgent" -Confirm:$false
-#   Remove-Item "$env:LOCALAPPDATA\RustAdmin" -Recurse -Force
+#   Unregister-ScheduledTask -TaskName "V-remoteAgent" -Confirm:$false
+#   Remove-Item "$env:LOCALAPPDATA\V-remote" -Recurse -Force
 
 param(
     [Parameter(Mandatory=$true)][string]$Server,
@@ -21,7 +21,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== RustAdmin Agent Installer ===" -ForegroundColor Green
+Write-Host "=== V-remote Agent Installer ===" -ForegroundColor Green
 Write-Host "Servidor: $Server"
 Write-Host ""
 
@@ -35,9 +35,9 @@ if (-not $python) {
 Write-Host "[OK] Python: $($python.Source)" -ForegroundColor Green
 
 # 2) Diretório de instalação
-$installDir = "$env:LOCALAPPDATA\RustAdmin"
+$installDir = "$env:LOCALAPPDATA\V-remote"
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-$scriptPath = Join-Path $installDir "rustadmin_agent.py"
+$scriptPath = Join-Path $installDir "vremote_agent.py"
 
 # 3) Download do agente
 Write-Host "Baixando agente de $Server/api/agent/script ..."
@@ -56,7 +56,7 @@ Write-Host "Instalando dependências Python (requests, mss, pillow, pyautogui)..
 Write-Host "[OK] Dependências instaladas" -ForegroundColor Green
 
 # 5) Tarefa Agendada
-$taskName = "RustAdminAgent"
+$taskName = "V-remoteAgent"
 $pythonExe = $python.Source
 $pythonwExe = Join-Path (Split-Path $pythonExe) "pythonw.exe"
 if (Test-Path $pythonwExe) { $exe = $pythonwExe } else { $exe = $pythonExe }
@@ -79,7 +79,7 @@ $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interac
 Register-ScheduledTask -TaskName $taskName -Action $action `
     -Trigger @($triggerLogon, $triggerStartup) `
     -Settings $settings -Principal $principal `
-    -Description "RustAdmin Remote Agent" | Out-Null
+    -Description "V-remote Remote Agent" | Out-Null
 
 Write-Host "[OK] Tarefa registrada" -ForegroundColor Green
 

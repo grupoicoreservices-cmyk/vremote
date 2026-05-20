@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-RustAdmin Agent (Python)
+V-remote Agent (Python)
 ========================
-Agente leve para registrar uma máquina no painel RustAdmin, enviar
+Agente leve para registrar uma máquina no painel V-remote, enviar
 heartbeats + screenshots e RECEBER comandos remotos (mouse/teclado)
 via long-polling.
 
@@ -15,9 +15,9 @@ Requisitos:
     # Windows: rode "python -m pip install pywin32" se quiser instalar como serviço
 
 Uso:
-    python rustadmin_agent.py --server https://seu-painel.exemplo.com --token rdpro_xxx
+    python vremote_agent.py --server https://seu-painel.exemplo.com --token rdpro_xxx
 
-A primeira execução cria ~/.rustadmin_agent.json com as credenciais
+A primeira execução cria ~/.vremote_agent.json com as credenciais
 do device. Execuções seguintes só precisam do arquivo de config.
 """
 
@@ -52,7 +52,7 @@ try:
 except Exception:
     pass
 
-CONFIG_FILE = Path.home() / ".rustadmin_agent.json"
+CONFIG_FILE = Path.home() / ".vremote_agent.json"
 HEARTBEAT_INTERVAL = 15
 SCREENSHOT_INTERVAL = 3        # active streaming when control session is open
 SCREENSHOT_IDLE_INTERVAL = 30  # when no commands recently
@@ -326,7 +326,7 @@ def command_thread(cfg, state):
 
 # ---- Main -------------------------------------------------------------------
 def parse_args():
-    p = argparse.ArgumentParser(description="RustAdmin Agent")
+    p = argparse.ArgumentParser(description="V-remote Agent")
     p.add_argument("--server", help="URL do painel, ex: https://painel.exemplo.com")
     p.add_argument("--token", help="Token de acesso (rdpro_...) gerado no painel")
     p.add_argument("--no-screenshot", action="store_true")

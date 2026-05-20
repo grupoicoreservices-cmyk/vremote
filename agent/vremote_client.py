@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RustAdmin Client (GUI)
+V-remote Client (GUI)
 ======================
 Aplicação desktop estilo RustDesk: o usuário abre, vê o ID dele e o
 suporte usa esse ID para conectar.
@@ -20,7 +20,7 @@ Requisitos:
     pip install mss pillow pyautogui
 
 Uso:
-    python rustadmin_client.py [--server URL]
+    python vremote_client.py [--server URL]
 """
 
 import argparse
@@ -55,7 +55,7 @@ try:
 except Exception:
     HAS_CONTROL = False
 
-CONFIG_FILE = Path.home() / ".rustadmin_agent.json"
+CONFIG_FILE = Path.home() / ".vremote_agent.json"
 
 # ---- Theme ------------------------------------------------------------------
 BG = "#0a0a0a"
@@ -110,7 +110,7 @@ def format_id(rid: str) -> str:
 
 
 # ---- Main App ---------------------------------------------------------------
-class RustAdminClient:
+class VRemoteClient:
     def __init__(self, server_default: str | None = None):
         self.cfg = self._load_config()
         self.server_default = server_default
@@ -120,13 +120,13 @@ class RustAdminClient:
         self.threads_started = False
 
         self.root = tk.Tk()
-        self.root.title("RustAdmin Client")
+        self.root.title("V-remote Client")
         self.root.configure(bg=BG)
         self.root.geometry("460x680")
         self.root.minsize(440, 600)
         try:
             # icon via emoji char fallback
-            self.root.iconname("RustAdmin")
+            self.root.iconname("V-remote")
         except Exception:
             pass
 
@@ -170,7 +170,7 @@ class RustAdminClient:
         frame = tk.Frame(self.root, bg=BG, padx=30, pady=30)
         frame.pack(fill="both", expand=True)
 
-        tk.Label(frame, text="RustAdmin", fg=TEXT, bg=BG, font=self.font_h1).pack(anchor="w")
+        tk.Label(frame, text="V-remote", fg=TEXT, bg=BG, font=self.font_h1).pack(anchor="w")
         tk.Label(frame, text="Configurar acesso ao painel", fg=MUTED, bg=BG, font=self.font_h2).pack(anchor="w", pady=(0, 24))
 
         tk.Label(frame, text="SERVIDOR (URL)", fg=MUTED, bg=BG, font=self.font_label).pack(anchor="w")
@@ -255,7 +255,7 @@ class RustAdminClient:
         # Header
         head = tk.Frame(outer, bg=BG)
         head.pack(fill="x")
-        tk.Label(head, text="RustAdmin", fg=TEXT, bg=BG, font=self.font_h1).pack(side="left")
+        tk.Label(head, text="V-remote", fg=TEXT, bg=BG, font=self.font_h1).pack(side="left")
         tk.Label(head, text=f"v1.0", fg=MUTED, bg=BG, font=self.font_small).pack(side="right")
 
         tk.Label(outer, text="Compartilhe seu ID com o suporte para conectar.",
@@ -531,7 +531,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--server", help="URL do painel (preenche no wizard)")
     args = parser.parse_args()
-    app = RustAdminClient(server_default=args.server)
+    app = VRemoteClient(server_default=args.server)
     app.root.mainloop()
 
 
