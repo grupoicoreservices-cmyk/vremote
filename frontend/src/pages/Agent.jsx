@@ -38,8 +38,12 @@ export default function Agent() {
 
   // One-line installer (admin PowerShell):
   const oneLineToken = selectedToken || "<SEU_TOKEN>";
-  const winInstallerCmd = `iwr -useb "${installerUrl}" -OutFile "$env:TEMP\\install_vremote.ps1"; & "$env:TEMP\\install_vremote.ps1" -Server "${BACKEND_URL}" -Token "${oneLineToken}"`;
-  const winGuiInstallerCmd = `iwr -useb "${guiInstallerUrl}" -OutFile "$env:TEMP\\install_vremote_gui.ps1"; & "$env:TEMP\\install_vremote_gui.ps1" -Server "${BACKEND_URL}"`;
+  const winInstallerCmd = `Set-ExecutionPolicy -Scope Process Bypass -Force
+iwr -useb "${installerUrl}" -OutFile "$env:TEMP\\install_vremote.ps1"
+& "$env:TEMP\\install_vremote.ps1" -Server "${BACKEND_URL}" -Token "${oneLineToken}"`;
+  const winGuiInstallerCmd = `Set-ExecutionPolicy -Scope Process Bypass -Force
+iwr -useb "${guiInstallerUrl}" -OutFile "$env:TEMP\\install_vremote_gui.ps1"
+& "$env:TEMP\\install_vremote_gui.ps1" -Server "${BACKEND_URL}"`;
   const exeGuiCmd = `pip install pyinstaller
 pyinstaller --onefile --noconsole --name VRemoteClient vremote_client.py
 # Resultado: dist\\VRemoteClient.exe (sem console, com janela GUI)
