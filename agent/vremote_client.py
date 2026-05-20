@@ -55,6 +55,12 @@ try:
 except Exception:
     HAS_CONTROL = False
 
+try:
+    import websocket as ws_client  # websocket-client package
+    HAS_WS = True
+except ImportError:
+    HAS_WS = False
+
 CONFIG_FILE = Path.home() / ".vremote_agent.json"
 
 # ---- Theme ------------------------------------------------------------------
@@ -397,8 +403,74 @@ class VRemoteClient:
             return
         self.threads_started = True
         threading.Thread(target=self._heartbeat_loop, daemon=True).start()
-        threading.Thread(target=self._screenshot_loop, daemon=True).start()
-        threading.Thread(target=self._command_loop, daemon=True).start()
+        if HAS_WS:
+            threading.Thread(target=self._ws_loop, daemon=True).start()
+        else:
+            # fallback to HTTP polling (slower)
+            threading.Thread(target=self._screenshot_loop, daemon=True).start()
+            threading.Thread(target=self._command_loop, daemon=True).start()
+
+    def _ws_loop(self):
+        """Real-time stream via WebSocket: send frames + receive commands."""
+        url = self.cfg["server"].replace("https://", "wss://").replace("http://", "ws://")
+        url = f"{url}/api/agent/ws/{self.cfg['device_id']}?secret={self.cfg['agent_secret']}"
+
+        def on_message(wsapp, message):
+            try:
+                data = json.loads(message)
+                if data.get("type") == "cmd":
+                    ok, err = self._execute_command(data)
+                    self.last_command_at = time.time()
+                    txt = f"Comando {data.get('action')} " + ("ok" if ok else f"falhou: {err}")
+                    self.root.after(0, lambda m=txt: self._log(m))
+            except Exception:
+                pass
+
+        def on_open(wsapp):
+            self.root.after(0, lambda: self._log("WS conectado — streaming em tempo real"))
+
+            def sender():
+                while getattr(wsapp, "keep_running", True):
+                    if not self.enabled or not HAS_SCREENSHOT:
+                        time.sleep(0.5)
+                        continue
+                    try:
+                        with mss.mss() as sct:
+                            mon = sct.monitors[1]
+                            shot = sct.grab(mon)
+                            img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+                            img.thumbnail((1280, 720))
+                            buf = io.BytesIO()
+                            img.save(buf, format="JPEG", quality=55)
+                            b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+                        sw, sh = screen_size()
+                        wsapp.send(json.dumps({
+                            "type": "frame",
+                            "image_base64": b64,
+                            "screen_width": sw,
+                            "screen_height": sh,
+                        }))
+                        time.sleep(0.13)  # ~7-8 FPS
+                    except Exception:
+                        break
+
+            threading.Thread(target=sender, daemon=True).start()
+
+        def on_close(wsapp, code, reason):
+            self.root.after(0, lambda: self._log(f"WS desconectado ({code}) — tentando reconectar"))
+
+        while True:
+            try:
+                wsapp = ws_client.WebSocketApp(
+                    url,
+                    on_message=on_message,
+                    on_open=on_open,
+                    on_close=on_close,
+                )
+                wsapp.run_forever(ping_interval=20, ping_timeout=10)
+            except Exception:
+                pass
+            time.sleep(3)
 
     def _heartbeat_loop(self):
         while True:

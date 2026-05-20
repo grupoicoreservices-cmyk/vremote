@@ -11,9 +11,9 @@ import logging
 import bcrypt
 import jwt as pyjwt
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Dict, Set
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query, WebSocket, WebSocketDisconnect
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
@@ -833,6 +833,116 @@ async def agent_installer_windows_gui():
     if not path.exists():
         raise HTTPException(status_code=404, detail="Instalador GUI não encontrado")
     return FileResponse(str(path), media_type="text/plain", filename="install_windows_gui.ps1")
+
+
+# ---------- WebSocket streaming (real-time) ----------
+# In-memory brokers (single-process). For multi-worker prod, replace with Redis pub/sub.
+agent_ws: Dict[str, WebSocket] = {}
+viewer_ws: Dict[str, Set[WebSocket]] = {}
+
+
+@api.websocket("/agent/ws/{device_id}")
+async def ws_agent(websocket: WebSocket, device_id: str, secret: str = ""):
+    device = await db.devices.find_one({"id": device_id}, {"_id": 0, "agent_secret": 1})
+    if not device or device.get("agent_secret") != secret:
+        await websocket.close(code=1008)
+        return
+    await websocket.accept()
+    # Drop any previous connection for this device
+    prev = agent_ws.get(device_id)
+    if prev is not None and prev is not websocket:
+        try:
+            await prev.close()
+        except Exception:
+            pass
+    agent_ws[device_id] = websocket
+    await db.devices.update_one(
+        {"id": device_id},
+        {"$set": {"status": "online", "last_seen": now_iso()}},
+    )
+    try:
+        while True:
+            msg = await websocket.receive_json()
+            t = msg.get("type")
+            if t == "frame":
+                # Broadcast to all viewers of this device
+                viewers = list(viewer_ws.get(device_id, set()))
+                dead = []
+                for v in viewers:
+                    try:
+                        await v.send_json(msg)
+                    except Exception:
+                        dead.append(v)
+                for v in dead:
+                    viewer_ws.get(device_id, set()).discard(v)
+            elif t == "heartbeat":
+                updates = {"status": "online", "last_seen": now_iso()}
+                if msg.get("screen_width"):
+                    updates["screen_width"] = msg["screen_width"]
+                if msg.get("screen_height"):
+                    updates["screen_height"] = msg["screen_height"]
+                if msg.get("can_control") is not None:
+                    updates["can_control"] = bool(msg["can_control"])
+                await db.devices.update_one({"id": device_id}, {"$set": updates})
+            # acks could be added later
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        if agent_ws.get(device_id) is websocket:
+            agent_ws.pop(device_id, None)
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
+
+@api.websocket("/sessions/{session_id}/ws")
+async def ws_session(websocket: WebSocket, session_id: str):
+    # Auth via cookie OR ?token=
+    token = websocket.cookies.get("access_token")
+    if not token:
+        token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=1008)
+        return
+    try:
+        payload = pyjwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "access":
+            raise ValueError("bad type")
+    except Exception:
+        await websocket.close(code=1008)
+        return
+
+    sess = await db.sessions.find_one({"id": session_id}, {"_id": 0})
+    if not sess or sess["status"] != "active":
+        await websocket.close(code=1008)
+        return
+    device_id = sess["device_id"]
+    await websocket.accept()
+    viewer_ws.setdefault(device_id, set()).add(websocket)
+    try:
+        while True:
+            msg = await websocket.receive_json()
+            if msg.get("type") == "cmd":
+                agent = agent_ws.get(device_id)
+                if agent is not None:
+                    try:
+                        await agent.send_json({
+                            "type": "cmd",
+                            "id": str(uuid.uuid4()),
+                            "action": msg.get("action"),
+                            "params": msg.get("params", {}),
+                        })
+                    except Exception:
+                        pass
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        viewer_ws.get(device_id, set()).discard(websocket)
 
 
 # ---------- Startup: Seed ----------

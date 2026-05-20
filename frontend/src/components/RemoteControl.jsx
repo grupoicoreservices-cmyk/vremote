@@ -3,10 +3,11 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Send, MousePointerClick, Keyboard, Power } from "lucide-react";
+import { Send, MousePointerClick, Keyboard, Power, Zap } from "lucide-react";
 import { toast } from "sonner";
 
-const REFRESH_MS = 1500;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const FALLBACK_REFRESH_MS = 1500;
 
 // fallback mock for devices without an agent screenshot
 const SCREEN_MOCK = "https://static.prod-images.emergentagent.com/jobs/539a4407-7ab7-4ef7-aae7-fc6df8facf83/images/c17222935a415163ef8706df95796192d9cd0349e0697954644b12d5afb97e31.png";
@@ -14,31 +15,99 @@ const SCREEN_MOCK = "https://static.prod-images.emergentagent.com/jobs/539a4407-
 export default function RemoteControl({ device, session, onEnd }) {
   const [screenshot, setScreenshot] = useState(null);
   const [keyInput, setKeyInput] = useState("");
+  const [wsConnected, setWsConnected] = useState(false);
+  const [fps, setFps] = useState(0);
   const imgRef = useRef(null);
+  const wsRef = useRef(null);
+  const frameCountRef = useRef(0);
+  const fpsTimerRef = useRef(null);
 
-  const canControl = !!screenshot?.can_control;
+  const canControl = wsConnected || !!screenshot?.can_control;
   const hasAgent = !!screenshot?.image_base64;
 
-  // Poll screenshot
+  // WebSocket live stream
   useEffect(() => {
-    let mounted = true;
-    const fetchShot = async () => {
-      try {
-        const { data } = await api.get(`/devices/${device.id}/screenshot`);
-        if (mounted) setScreenshot(data);
-      } catch (_) {}
-    };
-    fetchShot();
-    const id = setInterval(fetchShot, REFRESH_MS);
-    return () => { mounted = false; clearInterval(id); };
-  }, [device.id]);
+    const wsUrl = BACKEND_URL.replace(/^http/, "ws") + `/api/sessions/${session.id}/ws`;
+    let ws;
+    let pollId = null;
+    let closed = false;
 
-  const sendCmd = async (payload) => {
+    const startFallbackPolling = () => {
+      const fetchShot = async () => {
+        try {
+          const { data } = await api.get(`/devices/${device.id}/screenshot`);
+          setScreenshot(data);
+        } catch (_) {}
+      };
+      fetchShot();
+      pollId = setInterval(fetchShot, FALLBACK_REFRESH_MS);
+    };
+
     try {
-      await api.post(`/sessions/${session.id}/command`, payload);
-    } catch (e) {
-      toast.error("Falha ao enviar comando");
+      ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setWsConnected(true);
+        // FPS counter
+        fpsTimerRef.current = setInterval(() => {
+          setFps(frameCountRef.current);
+          frameCountRef.current = 0;
+        }, 1000);
+      };
+
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          if (msg.type === "frame") {
+            frameCountRef.current += 1;
+            setScreenshot({
+              image_base64: msg.image_base64,
+              screen_width: msg.screen_width,
+              screen_height: msg.screen_height,
+              can_control: true,
+              captured_at: new Date().toISOString(),
+            });
+          }
+        } catch (_) {}
+      };
+
+      ws.onerror = () => {
+        if (!closed) {
+          setWsConnected(false);
+          startFallbackPolling();
+        }
+      };
+
+      ws.onclose = () => {
+        setWsConnected(false);
+        if (!closed && !pollId) startFallbackPolling();
+      };
+    } catch (_) {
+      startFallbackPolling();
     }
+
+    return () => {
+      closed = true;
+      if (fpsTimerRef.current) clearInterval(fpsTimerRef.current);
+      if (pollId) clearInterval(pollId);
+      try { ws && ws.close(); } catch (_) {}
+      wsRef.current = null;
+    };
+  }, [device.id, session.id]);
+
+  const sendCmd = (payload) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type: "cmd", action: payload.action, params: payload }));
+        return;
+      } catch (_) {}
+    }
+    // fallback to HTTP
+    api.post(`/sessions/${session.id}/command`, payload).catch(() => {
+      toast.error("Falha ao enviar comando");
+    });
   };
 
   const getRelCoords = (e) => {
@@ -100,9 +169,13 @@ export default function RemoteControl({ device, session, onEnd }) {
       {/* Status bar */}
       <div className="flex items-center justify-between text-xs font-mono">
         <div className="flex items-center gap-3">
-          {hasAgent ? (
+          {wsConnected ? (
             <Badge variant="outline" className="rounded-sm border-green-500/40 text-green-500 text-[10px]">
-              <span className="pulse-dot bg-green-500 text-green-500 !w-1.5 !h-1.5 mr-1.5" /> AO VIVO · agente
+              <Zap className="w-3 h-3 mr-1" /> LIVE · {fps} FPS
+            </Badge>
+          ) : hasAgent ? (
+            <Badge variant="outline" className="rounded-sm border-amber-500/40 text-amber-500 text-[10px]">
+              <span className="pulse-dot bg-amber-500 text-amber-500 !w-1.5 !h-1.5 mr-1.5" /> HTTP fallback (lento)
             </Badge>
           ) : (
             <Badge variant="outline" className="rounded-sm border-amber-500/40 text-amber-500 text-[10px]">

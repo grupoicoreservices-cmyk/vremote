@@ -52,8 +52,8 @@ pyinstaller --onefile --noconsole --name VRemoteClient vremote_client.py
   const winCmd = `# 1) Baixe o script
 Invoke-WebRequest -Uri "${downloadUrl}" -OutFile "vremote_agent.py"
 
-# 2) Instale dependências (controle remoto requer pyautogui)
-pip install requests mss pillow pyautogui
+# 2) Instale dependências (controle remoto requer pyautogui, streaming requer websocket-client)
+pip install requests mss pillow pyautogui websocket-client
 
 # 3) Execute (substitua o token)
 ${runCmd}`;
@@ -62,7 +62,7 @@ ${runCmd}`;
 curl -O ${downloadUrl}
 
 # 2) Instale dependências
-pip3 install requests mss pillow pyautogui
+pip3 install requests mss pillow pyautogui websocket-client
 
 # 3) Execute
 ${runCmd}`;
