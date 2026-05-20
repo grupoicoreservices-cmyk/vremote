@@ -204,7 +204,7 @@ export default function RemoteControl({ device, session, onEnd }) {
 
       {/* Screen */}
       <div
-        className={`relative border border-neutral-800 rounded-sm overflow-hidden bg-black ${canControl ? "cursor-crosshair" : "cursor-default"}`}
+        className="relative border border-neutral-800 rounded-sm overflow-hidden bg-black cursor-default"
         onWheel={onWheel}
       >
         <img
