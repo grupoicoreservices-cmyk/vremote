@@ -1076,7 +1076,8 @@ async def on_startup():
     await db.login_attempts.create_index("identifier")
     await db.agent_commands.create_index([("device_id", 1), ("status", 1), ("created_at", 1)])
     await seed_admin()
-    await seed_demo_data()
+    if os.environ.get("SEED_DEMO_DATA", "false").lower() in ("1", "true", "yes"):
+        await seed_demo_data()
     log.info("V-remote API ready")
 
 
