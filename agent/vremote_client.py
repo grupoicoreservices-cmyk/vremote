@@ -63,6 +63,15 @@ except ImportError:
 
 CONFIG_FILE = Path.home() / ".vremote_agent.json"
 
+# ---- Quality presets (fps, jpeg_quality, max_width) -----------------------
+QUALITY_PRESETS = {
+    "low":    {"fps": 6,  "quality": 45, "max_w": 1024, "label": "Baixa  (6 FPS, leve)"},
+    "medium": {"fps": 15, "quality": 55, "max_w": 1280, "label": "Média  (15 FPS, padrão)"},
+    "high":   {"fps": 24, "quality": 60, "max_w": 1600, "label": "Alta   (24 FPS, rede boa)"},
+    "ultra":  {"fps": 30, "quality": 65, "max_w": 1920, "label": "Ultra  (30 FPS, LAN/fibra)"},
+}
+DEFAULT_QUALITY = "medium"
+
 # ---- Theme ------------------------------------------------------------------
 BG = "#0a0a0a"
 SURFACE = "#171717"
@@ -128,8 +137,8 @@ class VRemoteClient:
         self.root = tk.Tk()
         self.root.title("V-remote Client")
         self.root.configure(bg=BG)
-        self.root.geometry("460x680")
-        self.root.minsize(440, 600)
+        self.root.geometry("460x760")
+        self.root.minsize(440, 680)
         try:
             # icon via emoji char fallback
             self.root.iconname("V-remote")
@@ -319,6 +328,27 @@ class VRemoteClient:
                                     command=self._toggle_enabled)
         self.toggle_btn.pack(side="right")
 
+        # Quality selector
+        qframe = tk.Frame(outer, bg=SURFACE, highlightthickness=1, highlightbackground=BORDER)
+        qframe.pack(fill="x", pady=(0, 14))
+        qf = tk.Frame(qframe, bg=SURFACE, padx=16, pady=12)
+        qf.pack(fill="x")
+        tk.Label(qf, text="QUALIDADE / FPS", fg=MUTED, bg=SURFACE, font=self.font_label).pack(anchor="w")
+        current_q = self.cfg.get("quality", DEFAULT_QUALITY)
+        self.quality_var = tk.StringVar(value=QUALITY_PRESETS[current_q]["label"])
+        style = ttk.Style()
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+        style.configure("Q.TCombobox", fieldbackground=BG, background=BG, foreground=TEXT,
+                        arrowcolor=TEXT, bordercolor=BORDER, lightcolor=BORDER, darkcolor=BORDER)
+        combo = ttk.Combobox(qf, textvariable=self.quality_var, state="readonly",
+                              values=[p["label"] for p in QUALITY_PRESETS.values()],
+                              style="Q.TCombobox")
+        combo.pack(fill="x", pady=(6, 0), ipady=4)
+        combo.bind("<<ComboboxSelected>>", self._on_quality_change)
+
         # Activity log
         tk.Label(outer, text="ATIVIDADE RECENTE", fg=MUTED, bg=BG, font=self.font_label).pack(anchor="w", pady=(4, 6))
         log_frame = tk.Frame(outer, bg=SURFACE, highlightthickness=1, highlightbackground=BORDER)
@@ -367,6 +397,15 @@ class VRemoteClient:
         else:
             self.toggle_btn.config(text="○ PAUSADO", bg=BG, fg=AMBER)
             self._log("Conexões pausadas. Heartbeats continuam para manter o status.")
+
+    def _on_quality_change(self, _evt=None):
+        label = self.quality_var.get()
+        for key, preset in QUALITY_PRESETS.items():
+            if preset["label"] == label:
+                self.cfg["quality"] = key
+                self._save_config()
+                self._log(f"Qualidade alterada: {preset['fps']} FPS · {preset['max_w']}px · JPEG q{preset['quality']}")
+                return
 
     def _reset(self):
         if not messagebox.askyesno("Resetar", "Isto apaga a configuração local e exige novo token. Continuar?"):
@@ -510,13 +549,15 @@ class VRemoteClient:
                         time.sleep(0.5)
                         continue
                     try:
+                        preset = QUALITY_PRESETS.get(self.cfg.get("quality", DEFAULT_QUALITY), QUALITY_PRESETS[DEFAULT_QUALITY])
                         with mss.mss() as sct:
                             mon = sct.monitors[1]
                             shot = sct.grab(mon)
                             img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
-                            img.thumbnail((1280, 720))
+                            mw = preset["max_w"]
+                            img.thumbnail((mw, int(mw * 9 / 16)))
                             buf = io.BytesIO()
-                            img.save(buf, format="JPEG", quality=55)
+                            img.save(buf, format="JPEG", quality=preset["quality"], optimize=False)
                             b64 = base64.b64encode(buf.getvalue()).decode("ascii")
                         sw, sh = screen_size()
                         wsapp.send(json.dumps({
@@ -525,7 +566,7 @@ class VRemoteClient:
                             "screen_width": sw,
                             "screen_height": sh,
                         }))
-                        time.sleep(0.13)  # ~7-8 FPS
+                        time.sleep(max(0.02, 1.0 / preset["fps"]))
                     except Exception:
                         break
 

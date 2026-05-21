@@ -29,3 +29,13 @@
 - Heartbeat agora loga mudanças de estado (OK / falhou + razão) na atividade.
 - Novo botão **"Trocar servidor"** permite re-registrar em outra URL/token sem precisar resetar manualmente o arquivo de config.
 - `_reset` agora pede para fechar e reabrir (evita estado inconsistente).
+- **Fix WebSocket 404**: adicionado `websockets==13.1` em `requirements.txt` — sem isso o uvicorn não consegue fazer upgrade WS e devolve 404 para todas as rotas WebSocket.
+
+## 2026-02-25 — FPS configurável
+- Cliente Tkinter ganhou seletor de qualidade com 4 presets:
+  - **Baixa** (6 FPS / 1024px / q45) — economiza CPU/banda.
+  - **Média** (15 FPS / 1280px / q55) — padrão.
+  - **Alta** (24 FPS / 1600px / q60) — rede boa.
+  - **Ultra** (30 FPS / 1920px / q65) — LAN/fibra.
+- Preset persiste em `~/.vremote_agent.json` (campo `quality`).
+- Default aumentado de ~7 FPS para 15 FPS (Média).
