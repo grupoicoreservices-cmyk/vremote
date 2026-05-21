@@ -40,11 +40,13 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get install -y python3.12 python3.12-venv python3-pip git curl ufw nginx gnupg lsb-release ca-certificates
 
-# ---- 2. MongoDB 7 -----------------------------------------------------------
-echo ">> [2/9] MongoDB 7"
+# ---- 2. MongoDB 8 (suporte oficial para Ubuntu 24 noble) -------------------
+echo ">> [2/9] MongoDB 8"
+# Limpa entrada antiga da 7.0 se existir (falha em noble)
+rm -f /etc/apt/sources.list.d/mongodb-org-7.0.list /usr/share/keyrings/mongodb-server-7.0.gpg
 if ! systemctl list-unit-files | grep -q '^mongod\.service'; then
-    curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
-    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/7.0 multiverse" > /etc/apt/sources.list.d/mongodb-org-7.0.list
+    curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg --dearmor
+    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" > /etc/apt/sources.list.d/mongodb-org-8.0.list
     apt-get update -y
     apt-get install -y mongodb-org
 fi
