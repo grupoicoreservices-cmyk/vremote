@@ -169,8 +169,17 @@ ufw allow 'Nginx Full' >/dev/null 2>&1 || true
 yes | ufw enable >/dev/null 2>&1 || true
 
 if ! command -v certbot >/dev/null; then
-    snap install --classic certbot
-    ln -sf /snap/bin/certbot /usr/bin/certbot
+    # Tenta apt primeiro (mais leve), snap como fallback
+    if apt-get install -y certbot python3-certbot-nginx 2>/dev/null; then
+        :
+    elif command -v snap >/dev/null; then
+        snap install --classic certbot
+        ln -sf /snap/bin/certbot /usr/bin/certbot
+    else
+        apt-get install -y snapd
+        snap install --classic certbot
+        ln -sf /snap/bin/certbot /usr/bin/certbot
+    fi
 fi
 certbot --nginx -d "${DOMAIN}" --redirect --agree-tos -m "${EMAIL}" -n || {
     echo "AVISO: certbot falhou. Verifique se o DNS do domínio aponta para este servidor e rode de novo:"
