@@ -335,6 +335,10 @@ class VRemoteClient:
                   activebackground=BORDER, activeforeground=AMBER,
                   font=("Segoe UI", 9, "bold"), padx=12, pady=8, cursor="hand2",
                   command=self._reset, highlightthickness=1, highlightbackground=BORDER).pack(side="left")
+        tk.Button(foot, text="Trocar servidor", bg=BG, fg=TEXT, relief="flat",
+                  activebackground=BORDER, activeforeground=TEXT,
+                  font=("Segoe UI", 9, "bold"), padx=12, pady=8, cursor="hand2",
+                  command=self._change_server, highlightthickness=1, highlightbackground=BORDER).pack(side="left", padx=(8, 0))
         tk.Button(foot, text="Sair", bg=BG, fg=MUTED, relief="flat",
                   activebackground=BORDER, activeforeground=TEXT,
                   font=("Segoe UI", 9, "bold"), padx=12, pady=8, cursor="hand2",
@@ -373,7 +377,77 @@ class VRemoteClient:
         except Exception:
             pass
         self.cfg = None
-        self._build_setup()
+        messagebox.showinfo("Reiniciar", "Configuração apagada. Feche e abra o V-remote novamente.")
+        self.root.destroy()
+
+    def _change_server(self):
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Trocar servidor")
+        dlg.configure(bg=BG)
+        dlg.geometry("420x220")
+        dlg.transient(self.root)
+        dlg.grab_set()
+        tk.Label(dlg, text="Nova URL do painel", fg=TEXT, bg=BG, font=self.font_h2).pack(anchor="w", padx=20, pady=(20, 4))
+        entry = tk.Entry(dlg, bg=SURFACE, fg=TEXT, insertbackground=TEXT, relief="flat",
+                         font=self.font_body, highlightthickness=1, highlightbackground=BORDER,
+                         highlightcolor=GREEN)
+        entry.pack(fill="x", padx=20, ipady=8)
+        entry.insert(0, self.cfg.get("server", "https://"))
+        tk.Label(dlg, text="Novo token (rdpro_...)", fg=TEXT, bg=BG, font=self.font_h2).pack(anchor="w", padx=20, pady=(14, 4))
+        tok = tk.Entry(dlg, bg=SURFACE, fg=TEXT, insertbackground=TEXT, relief="flat",
+                       font=self.font_body, highlightthickness=1, highlightbackground=BORDER,
+                       highlightcolor=GREEN)
+        tok.pack(fill="x", padx=20, ipady=8)
+        tok.insert(0, "rdpro_")
+        status = tk.Label(dlg, text="", fg=AMBER, bg=BG, font=self.font_small)
+        status.pack(anchor="w", padx=20, pady=(8, 0))
+
+        def do_switch():
+            new_url = entry.get().strip().rstrip("/")
+            new_tok = tok.get().strip()
+            if not new_url.startswith("http") or not new_tok.startswith("rdpro_"):
+                status.config(text="URL inválida ou token deve começar com 'rdpro_'.")
+                return
+            status.config(text="Registrando no novo servidor…", fg=MUTED)
+            dlg.update_idletasks()
+            sw, sh = screen_size()
+            try:
+                r = requests.post(
+                    f"{new_url}/api/agent/register",
+                    json={
+                        "token": new_tok,
+                        "hostname": socket.gethostname(),
+                        "os": detect_os(),
+                        "ip": local_ip(),
+                        "version": "client-gui-1.0",
+                        "screen_width": sw,
+                        "screen_height": sh,
+                        "can_control": HAS_CONTROL,
+                    },
+                    timeout=15,
+                )
+                if r.status_code != 200:
+                    status.config(text=f"Falha: {r.status_code} {r.text[:120]}", fg=RED)
+                    return
+                data = r.json()
+                self.cfg = {
+                    "server": new_url,
+                    "device_id": data["device_id"],
+                    "rust_id": data["rust_id"],
+                    "agent_secret": data["agent_secret"],
+                    "name": data["name"],
+                }
+                self._save_config()
+                messagebox.showinfo("Pronto", "Servidor atualizado. O cliente será reiniciado.")
+                dlg.destroy()
+                self.root.destroy()
+            except Exception as e:
+                status.config(text=f"Erro de conexão: {e}", fg=RED)
+
+        tk.Button(dlg, text="TROCAR E RECONECTAR", bg=GREEN, fg="#000000",
+                  activebackground="#16a34a", activeforeground="#000000",
+                  relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2",
+                  padx=16, pady=10, command=do_switch).pack(fill="x", padx=20, pady=(14, 20))
 
     def _log(self, msg: str):
         t = time.strftime("%H:%M:%S")
@@ -412,8 +486,9 @@ class VRemoteClient:
 
     def _ws_loop(self):
         """Real-time stream via WebSocket: send frames + receive commands."""
-        url = self.cfg["server"].replace("https://", "wss://").replace("http://", "ws://")
-        url = f"{url}/api/agent/ws/{self.cfg['device_id']}?secret={self.cfg['agent_secret']}"
+        base = self.cfg["server"].replace("https://", "wss://").replace("http://", "ws://")
+        url = f"{base}/api/agent/ws/{self.cfg['device_id']}?secret={self.cfg['agent_secret']}"
+        self.root.after(0, lambda u=url: self._log(f"WS tentando: {u}"))
 
         def on_message(wsapp, message):
             try:
@@ -456,8 +531,14 @@ class VRemoteClient:
 
             threading.Thread(target=sender, daemon=True).start()
 
+        def on_error(wsapp, error):
+            # Mostra a causa real (DNS, SSL, 404, conexão recusada, etc.)
+            msg = f"WS erro: {type(error).__name__}: {error}"
+            self.root.after(0, lambda m=msg: self._log(m))
+
         def on_close(wsapp, code, reason):
-            self.root.after(0, lambda: self._log(f"WS desconectado ({code}) — tentando reconectar"))
+            extra = f" — {reason}" if reason else ""
+            self.root.after(0, lambda: self._log(f"WS desconectado ({code}){extra} — tentando reconectar"))
 
         while True:
             try:
@@ -465,16 +546,19 @@ class VRemoteClient:
                     url,
                     on_message=on_message,
                     on_open=on_open,
+                    on_error=on_error,
                     on_close=on_close,
                 )
                 wsapp.run_forever(ping_interval=20, ping_timeout=10)
-            except Exception:
-                pass
+            except Exception as e:
+                self.root.after(0, lambda er=e: self._log(f"WS exceção: {er}"))
             time.sleep(3)
 
     def _heartbeat_loop(self):
+        last_ok = None
         while True:
             ok = False
+            err_msg = ""
             try:
                 sw, sh = screen_size()
                 r = requests.post(
@@ -489,9 +573,19 @@ class VRemoteClient:
                     timeout=10,
                 )
                 ok = r.status_code == 200
-            except Exception:
+                if not ok:
+                    err_msg = f"HTTP {r.status_code}: {r.text[:120]}"
+            except Exception as e:
                 ok = False
-            self.root.after(0, lambda: self._set_status(ok))
+                err_msg = f"{type(e).__name__}: {e}"
+            # Só loga mudança de estado para não inundar
+            if last_ok is None or last_ok != ok:
+                if ok:
+                    self.root.after(0, lambda: self._log("Heartbeat OK — registrado no painel"))
+                else:
+                    self.root.after(0, lambda m=err_msg: self._log(f"Heartbeat falhou — {m}"))
+                last_ok = ok
+            self.root.after(0, lambda o=ok: self._set_status(o))
             self.root.after(0, lambda: self.last_seen_label.config(text=time.strftime("%H:%M:%S")))
             time.sleep(15)
 
